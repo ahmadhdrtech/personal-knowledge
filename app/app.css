@@ -251,3 +251,4 @@ table.post-fields td{vertical-align:middle;word-break:break-word}
 .result.ok{background:color-mix(in srgb,var(--solid) 12%,transparent)}
 .result.bad{background:color-mix(in srgb,var(--danger) 10%,transparent)}
 .badge.warn{color:var(--shaky);border-color:var(--shaky)}
+.limits{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0 12px}

@@ -2,7 +2,41 @@
 
 A personal learning app. Add sources (articles, notes, transcripts), and Neuron breaks each one into concepts and connects them across topics as a graph. Then it helps you understand and remember them with bilingual (English and Indonesian) tests, discussion and review. A concept seen in two sources is one node, and that shared node is what links topics together.
 
-Built with Next.js, TypeScript, SQLite (better-sqlite3 + Drizzle) and d3. Runs locally on Windows.
+Built with Next.js, TypeScript, SQLite (better-sqlite3 + Drizzle) and d3. Runs locally (built and tested on Windows; macOS and Linux should work the same with Bun and Node).
+
+![The knowledge map](docs/screenshots/map.png)
+
+## How it works
+
+**1. Add what you read, and it becomes a map.** Paste an article or your notes, or upload a PDF, Word file or web page. The AI picks out the key concepts, quotes the passage each one comes from, and suggests links between them. A concept that appears in two sources becomes one node, and that shared node is what connects your topics. Each node is colored by how well you know it (gray: not studied, amber: shaky, green: solid); the ring shows its topics.
+
+![A concept: summary, your definition, connections and sources](docs/screenshots/concept.png)
+
+**2. Open any concept** to see its summary, write your own definition (the AI treats it as the source of truth), follow its connections and sources, learn its terms in English and Indonesian, take a test, or discuss it with the AI.
+
+**3. Learn with “Teach me” lessons.** In Claude Desktop, ask “Teach me …”. Claude first asks a few questions to find what you already understand and what you’ve misunderstood. It then plans the steps to your goal from your map and teaches one step at a time: you predict, it explains, and it checks you. Everything is saved in **Lessons**.
+
+![A lesson: where you started, the plan, and each step](docs/screenshots/lesson-start.png)
+
+Explanations use whatever makes the idea clearest: equations, flowcharts, tables and drawn figures.
+
+![A lesson step with an equation, a flowchart and a table](docs/screenshots/lesson.png)
+
+**4. Remember it with spaced review.** Each answer (with how sure you were) updates your mastery and schedules the next review. Confident wrong answers are flagged as misconceptions and come back first.
+
+![Spaced review](docs/screenshots/review.png)
+
+**5. See the big picture.** **Views** answers different questions about your map. Priority shows which weak concepts hold the most together; there are also progress over time, a learning flow, a mind map, a domain matrix, a sunburst and a neighborhood view.
+
+![Priority view: mastery against connections](docs/screenshots/views-priority.png)
+
+**6. Turn your research into writing.** Before Claude writes anything, it asks you a short brief based on the rhetorical situation: who is speaking, the audience, genre, purpose, stance, context and culture. Blog posts come with the fields your platform needs (title, slug, summary, tags) and a .md download. Notes from your discussions are saved here too.
+
+![Writing: a blog post with its fields and brief](docs/screenshots/writing.png)
+
+**7. Use it from Claude Desktop.** Neuron includes an MCP server. Claude can read and search your map, quiz you and record results, teach lessons, add sources and save writing, using your Claude subscription instead of API credit.
+
+![Connecting Claude Desktop](docs/screenshots/claude-desktop.png)
 
 ## Start it
 
@@ -21,6 +55,13 @@ bun run dev
 Then open http://localhost:3000.
 
 The database is created at `data\neuron.db` on first start, with a 15-concept demo map across four topics (technology, science, money, history and philosophy). It survives restarts.
+
+## First steps
+
+1. **Settings → About you**: your name, background and interests. The AI uses them for examples and explanations that fit you. Optional, but it makes a big difference.
+2. **Settings → Your blog** (only if you blog): pick your platform (any Markdown blog, WordPress, Ghost, Medium, Substack, a static site like Hugo/Jekyll/Astro, or custom). It sets the field limits and format rules Claude follows when it turns your research into a post.
+3. **Models**: connect an AI (below), or connect Claude Desktop (menu **Claude Desktop**) to use your Claude subscription.
+4. **Settings → Start with an empty map** when you're ready to replace the demo with your own sources.
 
 ## Connect an AI model
 

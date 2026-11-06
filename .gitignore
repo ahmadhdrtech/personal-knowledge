@@ -1,8 +1,19 @@
+# dependencies and builds
 node_modules/
 .next/
-data/*.db
-data/*.db-*
-data/backups/
-.env.local
-next-env.d.ts
 *.tsbuildinfo
+next-env.d.ts
+
+# your data: the knowledge map, API keys typed in the app, backups
+data/
+
+# secrets
+.env
+.env.local
+.env.*.local
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

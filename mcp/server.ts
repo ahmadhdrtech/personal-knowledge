@@ -7,6 +7,7 @@ import { TEACH_STEPS, FORMAT_GUIDE } from "../lib/lesson-guide";
 import { indexAfterImport, search } from "../lib/search";
 import type { Concept, Confidence, Graph, LinkType, Writing, Lesson, LessonStep, ProbeItem } from "../lib/types";
 import { BRIEF, GROUPS, TECHNIQUES, KINDS, WORKFLOW, BLOG_STEPS, blogPreset } from "../lib/writing-guide";
+import { PLATFORMS, formatRules } from "../lib/blog";
 
 const SERVER = { name: "neuron", version: "0.7.0" };
 const SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -59,7 +60,7 @@ const TOOLS: Tool[] = [
         misconceptions: g.concepts.filter((c) => c.miscon).map((c) => c.id),
         calibration: { certain_answers: k.sure.n, certain_right_pct: k.sure.n ? Math.round((k.sure.right / k.sure.n) * 100) : null },
         suggested_links_waiting: g.links.filter((l) => l.status === "suggested").length, glossary_terms: g.glossary.length, language: g.prefs.lang,
-        learner: g.profile, blog: { name: g.blog.name, url: g.blog.url || null, language: g.blog.lang }, saved_writing: R.listWritings().length,
+        learner: g.profile.name || g.profile.about ? g.profile : "No profile yet (Settings → About you)", blog: { platform: PLATFORMS[g.blog.platform].name.en, name: g.blog.name || null, url: g.blog.url || null, language: g.blog.lang }, saved_writing: R.listWritings().length,
       };
     },
   },
@@ -300,7 +301,7 @@ const TOOLS: Tool[] = [
       const L: "en" | "id" = a.lang === "id" || a.lang === "en" ? a.lang : g.prefs.lang === "id" ? "id" : "en";
       const blog = a.preset === "blog";
       return {
-        ...(blog ? { blog_steps: BLOG_STEPS, prefilled: blogPreset(g.profile, g.blog), blog_format: g.blog.format, blog: g.blog, still_ask: ["purpose", "stance", "context", "culture"] } : {}),
+        ...(blog ? { blog_steps: BLOG_STEPS, prefilled: blogPreset(g.profile, g.blog), blog_format: formatRules(g.blog), blog: { ...g.blog, platform_name: PLATFORMS[g.blog.platform].name.en, has_slug: PLATFORMS[g.blog.platform].hasSlug, has_tags: PLATFORMS[g.blog.platform].hasTags, excerpt_label: PLATFORMS[g.blog.platform].excerpt.en }, still_ask: ["purpose", "stance", "context", "culture", ...(!g.profile.name && !g.profile.about ? ["originator"] : []), ...(!g.blog.audience ? ["audience"] : [])] } : {}),
         learner: g.profile,
         steps: WORKFLOW,
         brief: (["agents", "conditions", "craft"] as const).map((g) => ({
@@ -321,8 +322,8 @@ const TOOLS: Tool[] = [
         brief: { type: "object", description: "The user's answers, one short line each", properties: Object.fromEntries(BRIEF.map((q) => [q.key, { ...str, description: q.q.en }])) },
         concepts: { type: "array", items: str, description: "Ids or labels of concepts it draws on" }, lang: { type: "string", enum: ["en", "id"] },
         post: { type: "object", description: "For a blog post: the extra fields of the blog's admin form", properties: {
-          slug: { ...str, description: "lowercase-words-with-hyphens, max 80" }, excerpt: { ...str, description: "Ringkasan, max 300 characters" },
-          tags: { ...str, description: "Comma separated, max 200 characters" }, cover_url: { ...str, description: "Optional image URL, ideally 1200x630" },
+          slug: { ...str, description: "lowercase-words-with-hyphens (limit in blog settings)" }, excerpt: { ...str, description: "Summary / subtitle / meta description (limit in blog settings)" },
+          tags: { ...str, description: "Comma separated" }, cover_url: { ...str, description: "Optional image URL, ideally 1200x630" },
           sources: { type: "array", items: { type: "object", required: ["title"], properties: { title: str, url: str } } },
         } },
       },
@@ -332,18 +333,20 @@ const TOOLS: Tool[] = [
       const title = String(a.title).trim();
       let post = null; const warnings: string[] = [];
       if (a.post && typeof a.post === "object") {
-        const slug = R.slugify(String(a.post.slug || title));
-        const excerpt = String(a.post.excerpt || "").trim(), tags = String(a.post.tags || "").split(",").map((x: string) => x.trim()).filter(Boolean).join(", ");
-        if (title.length > 140) warnings.push(`Title is ${title.length} characters; the blog allows 140.`);
-        if (excerpt.length > 300) warnings.push(`Excerpt is ${excerpt.length} characters; the blog allows 300.`);
-        if (tags.length > 200) warnings.push(`Tags are ${tags.length} characters; the blog allows 200.`);
-        if (/<\/?[a-z][^>]*>/i.test(String(a.body))) warnings.push("The body contains HTML tags; the blog shows them as plain text. Use Markdown instead.");
+        const b = graph().blog, plat = PLATFORMS[b.platform];
+        const slug = R.slugify(String(a.post.slug || title), b.slugMax);
+        const excerpt = String(a.post.excerpt || "").trim(), tagList = String(a.post.tags || "").split(",").map((x: string) => x.trim()).filter(Boolean), tags = tagList.join(", ");
+        if (title.length > b.titleMax) warnings.push(`Title is ${title.length} characters; this blog's limit is ${b.titleMax}.`);
+        if (excerpt.length > b.excerptMax) warnings.push(`${plat.excerpt.en} is ${excerpt.length} characters; the limit is ${b.excerptMax}.`);
+        if (plat.hasTags && b.tagsMax > 0 && tagList.length > b.tagsMax) warnings.push(`${tagList.length} tags; this blog takes up to ${b.tagsMax}.`);
+        if (!b.allowHtml && /<\/?[a-z][^>]*>/i.test(String(a.body))) warnings.push("The body contains HTML tags; this blog doesn't accept HTML. Use Markdown instead.");
+        if ((b.platform === "medium" || b.platform === "substack") && /^\s*\|.*\|\s*$/m.test(String(a.body))) warnings.push(`${plat.name.en} doesn't support tables; turn them into lists.`);
         if (/\]\((?!https?:|mailto:|\/|#)/i.test(String(a.body))) warnings.push("Some links don't start with https://; the blog drops them.");
         const sources = Array.isArray(a.post.sources) ? a.post.sources.map((x: any) => ({ title: String(x.title || ""), ...(x.url ? { url: String(x.url) } : {}) })).filter((x: any) => x.title) : [];
         post = { slug, excerpt, tags, coverUrl: String(a.post.cover_url || "").trim(), sources };
       }
       const id = R.saveWriting({ id: a.id ? Number(a.id) : null, kind: "writing", title: title.slice(0, 200), body: String(a.body), brief: a.brief || {}, conceptIds: ids, lang: a.lang || null, post });
-      return { saved: true, id, linked_concepts: ids, ...(post ? { slug: post.slug } : {}), ...(warnings.length ? { fix_these: warnings } : {}), ...(unknown.length ? { not_found: unknown } : {}), note: post ? "It's in Neuron → Writing with a Blog post panel: the user copies each field into their blog admin. If fix_these is present, fix it and save again with the same id." : "It's in the Writing menu of the app." };
+      return { saved: true, id, linked_concepts: ids, ...(post ? { slug: post.slug } : {}), ...(warnings.length ? { fix_these: warnings } : {}), ...(unknown.length ? { not_found: unknown } : {}), note: post ? "It's in Neuron → Writing with a Blog post panel: the user copies each field into their blog editor or downloads a .md file. If fix_these is present, fix it and save again with the same id." : "It's in the Writing menu of the app." };
     },
   },
   {

@@ -5,6 +5,7 @@
 // The rest comes from the same section's learning outcomes (language, expectations,
 // patterns of organization, verbal and nonverbal elements) and its "Social Media Savvy" part.
 import type { Bi } from "./types";
+import { PLATFORMS, formatRules, type BlogSettings } from "./blog";
 
 export type BriefKey =
   | "originator" | "audience" | "genre" | "purpose" | "stance" | "context" | "culture"
@@ -39,7 +40,7 @@ export const BRIEF: BriefQuestion[] = [
     q: { en: "Who is speaking?", id: "Siapa yang berbicara?" },
     why: { en: "The originator starts the communication. Whose voice it is, and why they should be believed, changes how every sentence is read.", id: "Pembuat pesan adalah yang memulai komunikasi. Suara siapa yang dipakai, dan kenapa ia layak dipercaya, mengubah cara setiap kalimat dibaca." },
     how: { en: "Say whose name it goes out under and what gives that voice credibility (experience, role, results).", id: "Sebutkan atas nama siapa tulisan ini keluar dan apa yang membuat suara itu kredibel (pengalaman, peran, hasil)." },
-    examples: { en: ["Me, as an Informatics student who builds apps", "Me, on my portfolio blog", "A guest voice: explaining as a tutor would"], id: ["Saya, sebagai mahasiswa Informatika yang membuat aplikasi", "Saya, di blog portofolio saya", "Suara tamu: menjelaskan seperti tutor"] },
+    examples: { en: ["Me, as a student of the subject", "Me, as someone who works in this field", "A guest voice: explaining as a tutor would"], id: ["Saya, sebagai mahasiswa di bidang ini", "Saya, sebagai orang yang bekerja di bidang ini", "Suara tamu: menjelaskan seperti tutor"] },
     fallback: { en: "You, in your own voice.", id: "Kamu, dengan suaramu sendiri." },
   },
   {
@@ -47,7 +48,7 @@ export const BRIEF: BriefQuestion[] = [
     q: { en: "Who will read it, and do you know them?", id: "Siapa yang akan membaca, dan apakah kamu mengenal mereka?" },
     why: { en: "A real audience is people you know or know of (your class, a lecturer, one client). An anticipated audience is people you hope or expect to reach (followers, strangers who search). It decides what you explain, which words you use and how they may react.", id: "Audiens nyata adalah orang yang kamu kenal atau ketahui (kelasmu, dosen, satu klien). Audiens yang diantisipasi adalah orang yang kamu harap atau perkirakan terjangkau (pengikut, orang asing yang mencari). Ini menentukan apa yang perlu dijelaskan, kata yang dipakai, dan bagaimana reaksi mereka." },
     how: { en: "Name the group, say real or anticipated, what they already know, what they care about, and how they might react.", id: "Sebutkan kelompoknya, nyata atau diantisipasi, apa yang sudah mereka tahu, apa yang mereka pedulikan, dan kemungkinan reaksinya." },
-    examples: { en: ["Real: my lecturer and 30 classmates", "Anticipated: Indonesian readers who find my blog through Google", "Anticipated: recruiters checking my portfolio"], id: ["Nyata: dosen dan 30 teman sekelas", "Diantisipasi: pembaca Indonesia yang menemukan blogku lewat Google", "Diantisipasi: rekruter yang melihat portofolioku"] },
+    examples: { en: ["Real: my lecturer and 30 classmates", "Anticipated: Indonesian readers who find my blog through Google", "Anticipated: people in my field reading on LinkedIn"], id: ["Nyata: dosen dan 30 teman sekelas", "Diantisipasi: pembaca Indonesia yang menemukan blogku lewat Google", "Diantisipasi: orang di bidangku yang membaca di LinkedIn"] },
     fallback: { en: "No fallback: this one is needed.", id: "Tidak ada bawaan: yang ini wajib." },
   },
   {
@@ -55,7 +56,7 @@ export const BRIEF: BriefQuestion[] = [
     q: { en: "What genre or medium?", id: "Genre atau medianya apa?" },
     why: { en: "Genre is the mode you communicate in. Each one has conventions readers expect: length, structure, tone, layout. Breaking them should be a choice, not an accident.", id: "Genre adalah bentuk kamu berkomunikasi. Tiap genre punya konvensi yang diharapkan pembaca: panjang, struktur, nada, tata letak. Melanggarnya harus jadi pilihan, bukan kebetulan." },
     how: { en: "Name the form and where it will appear.", id: "Sebutkan bentuknya dan di mana akan tampil." },
-    examples: { en: ["Blog post on my portfolio", "Academic essay for a course", "LinkedIn post", "Technical tutorial with code", "Thread on X", "Presentation script"], id: ["Tulisan blog di portofolioku", "Esai akademik untuk mata kuliah", "Postingan LinkedIn", "Tutorial teknis dengan kode", "Thread di X", "Naskah presentasi"] },
+    examples: { en: ["Blog post", "Academic essay for a course", "LinkedIn post", "Technical tutorial with code", "Thread on X", "Presentation script"], id: ["Tulisan blog", "Esai akademik untuk mata kuliah", "Postingan LinkedIn", "Tutorial teknis dengan kode", "Thread di X", "Naskah presentasi"] },
     fallback: { en: "No fallback: this one is needed.", id: "Tidak ada bawaan: yang ini wajib." },
   },
   {
@@ -63,7 +64,7 @@ export const BRIEF: BriefQuestion[] = [
     q: { en: "Why are you writing it?", id: "Kenapa kamu menulisnya?" },
     why: { en: "Purpose is your reason, and there is often more than one: what the text does for the reader (inform, persuade, entertain, reflect, call to action) and what you want from it (a good grade, leads, attention, connection).", id: "Tujuan adalah alasanmu, dan sering lebih dari satu: apa yang dilakukan teks untuk pembaca (memberi info, membujuk, menghibur, merefleksikan, mengajak bertindak) dan apa yang kamu inginkan darinya (nilai bagus, prospek, perhatian, kedekatan)." },
     how: { en: "Pick the main purpose, add a second if there is one, and say what the reader should think, feel or do afterwards.", id: "Pilih tujuan utama, tambahkan tujuan kedua kalau ada, dan sebutkan apa yang harus dipikirkan, dirasakan, atau dilakukan pembaca setelahnya." },
-    examples: { en: ["Inform: explain how compound interest works", "Persuade: start using version control early", "Reflect on a project I built, and show recruiters my thinking"], id: ["Memberi info: menjelaskan cara kerja bunga majemuk", "Membujuk: mulai pakai version control sejak awal", "Merefleksikan proyek yang kubuat, sekaligus menunjukkan cara berpikirku ke rekruter"] },
+    examples: { en: ["Inform: explain how compound interest works", "Persuade: start using version control early", "Reflect on a project I finished, and what I would change"], id: ["Memberi info: menjelaskan cara kerja bunga majemuk", "Membujuk: mulai pakai version control sejak awal", "Merefleksikan proyek yang kuselesaikan, dan apa yang akan kuubah"] },
     fallback: { en: "No fallback: this one is needed.", id: "Tidak ada bawaan: yang ini wajib." },
   },
   {
@@ -143,7 +144,7 @@ export const BRIEF: BriefQuestion[] = [
     q: { en: "If it's public: how will it age?", id: "Kalau publik: bagaimana jejaknya nanti?" },
     why: { en: "Every post leaves a digital footprint that may never go away. Ask how it would read to a future employer, client or admissions office.", id: "Setiap postingan meninggalkan jejak digital yang mungkin tidak pernah hilang. Tanyakan bagaimana tulisan ini dibaca oleh calon atasan, klien, atau panitia penerimaan nanti." },
     how: { en: "Say yes, it's public, and anything you don't want tied to your name.", id: "Sebutkan ya, ini publik, dan hal apa yang tidak ingin dikaitkan dengan namamu." },
-    examples: { en: ["Public on my portfolio blog: recruiters will read it", "Private, only my lecturer sees it", "Public, but no opinions about my current workplace"], id: ["Publik di blog portofolio: rekruter akan membacanya", "Privat, hanya dosen yang melihat", "Publik, tapi tanpa opini tentang tempat kerjaku sekarang"] },
+    examples: { en: ["Public on my blog: anyone can find it", "Private, only my lecturer sees it", "Public, but no opinions about my current workplace"], id: ["Publik di blogku: siapa saja bisa menemukannya", "Privat, hanya dosen yang melihat", "Publik, tapi tanpa opini tentang tempat kerjaku sekarang"] },
     fallback: { en: "Claude adds a short footprint check for anything public.", id: "Claude menambahkan cek jejak digital singkat untuk tulisan publik." },
   },
 ];
@@ -191,18 +192,22 @@ export const WORKFLOW = [
 ];
 
 /** Starting answers for a blog post, built from Settings → About you and Your blog. The user confirms or changes them. */
-export function blogPreset(p: { name: string; about: string; interests: string }, b: { name: string; lang: "en" | "id"; audience: string; voice: string; format: string; url: string; section: string }): Partial<Record<BriefKey, string>> {
-  return {
-    originator: `${p.name}: ${p.about}`,
-    audience: `Anticipated: ${b.audience}`,
-    genre: `Blog post on ${b.name}${b.url ? ` (${b.url}${b.section})` : ` (${b.section})`}`,
-    language: b.lang === "id" ? "Indonesian, natural and clear (not stiff EYD), English terms kept where readers know them" : "English, plain and clear",
-    expectations: b.format,
-    style: b.voice,
-    visuals: "Subheadings (##), short paragraphs; a table, list or code block where it helps; optional cover image 1200×630",
+export function blogPreset(p: { name: string; about: string; interests: string }, b: BlogSettings): Partial<Record<BriefKey, string>> {
+  const plat = PLATFORMS[b.platform] || PLATFORMS.markdown;
+  const where = b.name ? `${b.name}${b.url ? ` (${b.url})` : ""}` : plat.name.en;
+  const out: Partial<Record<BriefKey, string>> = {
+    genre: `Blog post on ${where}`,
+    language: b.lang === "id" ? "Indonesian, natural and clear (not stiff), English terms kept where readers know them" : "English, plain and clear",
+    expectations: formatRules(b),
+    visuals: "Subheadings (##), short paragraphs; a table, list or code block where it helps; optional cover image",
     material: "My research in Neuron (concepts, sources, notes), cited with links; anything not from my sources must be checked and cited",
-    footprint: "Public on my portfolio: recruiters and clients may read it",
+    footprint: "Public: anyone, including future employers or clients, may read it",
   };
+  const who = [p.name, p.about].filter(Boolean).join(": ");
+  if (who) out.originator = who;
+  if (b.audience) out.audience = `Anticipated: ${b.audience}`;
+  if (b.voice) out.style = b.voice;
+  return out;
 }
 
 /** Extra steps for the research-to-post flow. */
@@ -211,7 +216,7 @@ export const BLOG_STEPS = [
   "2. If something important is missing, offer to research it (web search if you have it). Keep every fact with its source and link. Never present your own knowledge as the user's research.",
   "3. Run the brief from neuron_writing_guide. The 'prefilled' answers come from the user's Settings: show them as one short list to confirm or change, and ask only the open core questions (purpose, stance, context, culture) with guidance and examples.",
   "4. Propose an angle and an outline (title, 4-6 ## sections, the technique) and wait for an OK.",
-  "5. Write the post in Markdown following blog_format exactly: no HTML, start with ## subheadings (the page shows the title), short paragraphs, links as [text](https://...). End with a '## Sumber' (Indonesian) or '## Sources' section listing every source with its link.",
-  "6. Also write: a title (max 140 characters), a slug (lowercase-words-with-hyphens, max 80), a ringkasan/excerpt (max 300 characters, makes people click), 3-6 comma-separated tags, and an optional cover image idea.",
-  "7. Add short Rhetorical notes and a digital footprint check. Offer to save; on OK call neuron_save_writing with brief, post (slug, excerpt, tags, cover_url, sources) and the concepts used. Tell the user it's in Neuron → Writing, ready to copy field by field into their blog admin.",
+  "5. Write the post in Markdown following blog_format exactly (it depends on the user's blog platform): start with ## subheadings (the title is a separate field), short paragraphs, links as [text](https://...). End with a '## Sumber' (Indonesian) or '## Sources' section listing every source with its link.",
+  "6. Also write the fields the platform uses (see blog: has_slug, has_tags, excerpt_label and the limits in blog_format): a title, a slug, the summary/subtitle, tags, and an optional cover image idea.",
+  "7. Add short Rhetorical notes and a digital footprint check. Offer to save; on OK call neuron_save_writing with brief, post (slug, excerpt, tags, cover_url, sources) and the concepts used. Tell the user it's in Neuron → Writing, ready to copy field by field into their blog editor or download as a .md file.",
 ];

@@ -6174,6 +6174,166 @@ function getDb() {
   return g.__neuronDb;
 }
 
+// lib/blog.ts
+var PLATFORMS = {
+  markdown: {
+    name: { en: "Any Markdown blog or CMS", id: "Blog atau CMS Markdown apa pun" },
+    about: { en: "A safe default: plain Markdown that pastes into most editors.", id: "Pilihan aman: Markdown biasa yang bisa ditempel ke kebanyakan editor." },
+    adminPath: "",
+    excerpt: { en: "Summary", id: "Ringkasan" },
+    titleMax: 70,
+    slugMax: 80,
+    excerptMax: 160,
+    tagsMax: 6,
+    allowHtml: false,
+    hasSlug: true,
+    hasTags: true,
+    rules: "Plain Markdown only: ## headings, short paragraphs, lists, tables, [links](https://\u2026). No raw HTML. The page shows the title, so the body starts at ## level."
+  },
+  wordpress: {
+    name: { en: "WordPress", id: "WordPress" },
+    about: { en: "Paste the Markdown into the block editor; it converts headings, lists and links.", id: "Tempel Markdown ke editor blok; judul, daftar, dan tautan otomatis dikonversi." },
+    adminPath: "/wp-admin/post-new.php",
+    excerpt: { en: "Excerpt / meta description", id: "Kutipan / deskripsi meta" },
+    titleMax: 60,
+    slugMax: 75,
+    excerptMax: 155,
+    tagsMax: 8,
+    allowHtml: true,
+    hasSlug: true,
+    hasTags: true,
+    rules: "Markdown that the WordPress block editor converts on paste: ## headings, lists, tables, links, images by URL. Keep the title under 60 characters and the meta description under 155 for search results."
+  },
+  ghost: {
+    name: { en: "Ghost", id: "Ghost" },
+    about: { en: "Paste into a Markdown card, or straight into the editor.", id: "Tempel ke kartu Markdown, atau langsung ke editor." },
+    adminPath: "/ghost/#/editor/post",
+    excerpt: { en: "Excerpt", id: "Kutipan" },
+    titleMax: 70,
+    slugMax: 80,
+    excerptMax: 300,
+    tagsMax: 6,
+    allowHtml: false,
+    hasSlug: true,
+    hasTags: true,
+    rules: "Markdown for a Ghost Markdown card: ## headings, lists, links, images by URL. Custom excerpt up to 300 characters."
+  },
+  medium: {
+    name: { en: "Medium", id: "Medium" },
+    about: { en: "Medium has no slug field and allows up to 5 topics; the subtitle shows under the title.", id: "Medium tidak punya kolom slug dan maksimal 5 topik; subjudul tampil di bawah judul." },
+    adminPath: "/new-story",
+    excerpt: { en: "Subtitle", id: "Subjudul" },
+    titleMax: 100,
+    slugMax: 80,
+    excerptMax: 140,
+    tagsMax: 5,
+    allowHtml: false,
+    hasSlug: false,
+    hasTags: true,
+    rules: "Medium-friendly Markdown: ## and ### headings only, short paragraphs, lists, links, block quotes. No tables (Medium doesn't support them): use a list instead. Code in ``` blocks."
+  },
+  substack: {
+    name: { en: "Substack", id: "Substack" },
+    about: { en: "A newsletter post: title, subtitle and body; no tags.", id: "Postingan newsletter: judul, subjudul, dan isi; tanpa tag." },
+    adminPath: "/publish/post",
+    excerpt: { en: "Subtitle", id: "Subjudul" },
+    titleMax: 80,
+    slugMax: 80,
+    excerptMax: 160,
+    tagsMax: 0,
+    allowHtml: false,
+    hasSlug: true,
+    hasTags: false,
+    rules: "Substack-friendly Markdown: ## headings, short paragraphs, lists, links, block quotes. No tables. Written to be read in an email inbox: a strong first paragraph."
+  },
+  static: {
+    name: { en: "Static site (Hugo, Jekyll, Astro, Next.js\u2026)", id: "Situs statis (Hugo, Jekyll, Astro, Next.js\u2026)" },
+    about: { en: "Download the post as a .md file with front matter and drop it into your content folder.", id: "Unduh tulisan sebagai file .md dengan front matter, lalu taruh di folder konten situsmu." },
+    adminPath: "",
+    excerpt: { en: "Description", id: "Deskripsi" },
+    titleMax: 70,
+    slugMax: 80,
+    excerptMax: 160,
+    tagsMax: 6,
+    allowHtml: false,
+    hasSlug: true,
+    hasTags: true,
+    rules: "Markdown for a static site generator: ## headings, lists, tables, fenced code blocks with a language, [links](https://\u2026). The title, slug, description and tags go in the front matter, not the body."
+  },
+  custom: {
+    name: { en: "Custom (set your own rules)", id: "Kustom (atur aturanmu sendiri)" },
+    about: { en: "Your own site or admin form: set the limits and write the rules below.", id: "Situs atau form admin milikmu: atur batasnya dan tulis aturannya di bawah." },
+    adminPath: "",
+    excerpt: { en: "Summary", id: "Ringkasan" },
+    titleMax: 140,
+    slugMax: 80,
+    excerptMax: 300,
+    tagsMax: 6,
+    allowHtml: false,
+    hasSlug: true,
+    hasTags: true,
+    rules: "Markdown. Follow the notes below."
+  }
+};
+var DEFAULT_BLOG = {
+  platform: "markdown",
+  name: "",
+  url: "",
+  adminPath: "",
+  lang: "en",
+  audience: "",
+  voice: "Clear and friendly; explains simply with real examples",
+  titleMax: 70,
+  slugMax: 80,
+  excerptMax: 160,
+  tagsMax: 6,
+  allowHtml: false,
+  notes: ""
+};
+function withPlatform(b, p) {
+  const x = PLATFORMS[p];
+  return { ...b, platform: p, adminPath: b.adminPath && b.platform === p ? b.adminPath : x.adminPath, titleMax: x.titleMax, slugMax: x.slugMax, excerptMax: x.excerptMax, tagsMax: x.tagsMax, allowHtml: x.allowHtml };
+}
+function formatRules(b) {
+  const x = PLATFORMS[b.platform] || PLATFORMS.markdown;
+  const parts = [
+    `Platform: ${x.name.en}. ${x.rules}`,
+    `Title: at most ${b.titleMax} characters.`,
+    x.hasSlug ? `Slug: lowercase words joined by hyphens, at most ${b.slugMax} characters.` : "No slug field.",
+    `${x.excerpt.en}: at most ${b.excerptMax} characters; it makes people click.`,
+    x.hasTags && b.tagsMax > 0 ? `Tags: up to ${b.tagsMax}, comma separated.` : "No tags.",
+    b.allowHtml ? "HTML is allowed but prefer Markdown." : "No HTML: it would show as text or be removed.",
+    "Links must start with https://."
+  ];
+  if (b.notes.trim()) parts.push(`The writer's own rules: ${b.notes.trim()}`);
+  return parts.join(" ");
+}
+function normalizeBlog(raw) {
+  const r = raw || {};
+  const legacy = typeof r.format === "string" && !r.platform;
+  const platform = (legacy ? "custom" : r.platform) in PLATFORMS ? legacy ? "custom" : r.platform : DEFAULT_BLOG.platform;
+  const base = withPlatform({ ...DEFAULT_BLOG }, platform);
+  const num = (v, d, max) => Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.min(max, Math.round(Number(v))) : d;
+  const str2 = (v, d, max) => typeof v === "string" ? v.trim().slice(0, max) : d;
+  const out = {
+    platform,
+    name: str2(r.name, base.name, 120),
+    url: str2(r.url, base.url, 200).replace(/\/+$/, ""),
+    adminPath: str2(r.adminPath, base.adminPath, 160),
+    lang: r.lang === "id" ? "id" : r.lang === "en" ? "en" : base.lang,
+    audience: str2(r.audience, base.audience, 400),
+    voice: str2(r.voice, base.voice, 300),
+    titleMax: num(r.titleMax, legacy ? 140 : base.titleMax, 300),
+    slugMax: num(r.slugMax, base.slugMax, 200),
+    excerptMax: num(r.excerptMax, legacy ? 300 : base.excerptMax, 1e3),
+    tagsMax: num(r.tagsMax, base.tagsMax, 30),
+    allowHtml: typeof r.allowHtml === "boolean" ? r.allowHtml : base.allowHtml,
+    notes: str2(legacy ? r.format : r.notes, base.notes, 1500)
+  };
+  if (legacy && typeof r.section === "string" && r.section && out.url && !out.url.endsWith(r.section)) out.notes = `Posts live under ${r.section}. ${out.notes}`.trim();
+  return out;
+}
+
 // lib/logic.ts
 var TYPES = {
   prerequisite: { say: { en: "is needed for", id: "dibutuhkan untuk" }, dir: true, name: { en: "Needed for", id: "Dibutuhkan untuk" } },
@@ -8170,27 +8330,12 @@ function getPrefs() {
   if (p.lang !== "en" && p.lang !== "id") p.lang = "en";
   return p;
 }
-var DEFAULT_PROFILE = {
-  name: "Ahmad Haidar",
-  about: "University student in Informatics (Teknik Informatika). Builds web and mobile apps.",
-  interests: "Technology and programming; science and nature; business and money; history, philosophy and society",
-  examples: "software and AI, physics and biology, startups and personal finance, history and philosophy"
-};
-var DEFAULT_BLOG = {
-  name: "Ahmad Haidar \xB7 Portfolio (Tulisan)",
-  url: "",
-  section: "/tulisan",
-  adminPath: "/admin/tulisan/baru",
-  lang: "id",
-  audience: "Indonesian readers curious about tech, science, money and ideas: students, developers, recruiters",
-  voice: "Clear, curious and honest; explains simply with real examples; no hype",
-  format: "Markdown only, no HTML (it is shown as text). The page shows the title, so start the body with ## subheadings. Title max 140 characters. Slug: lowercase words joined by hyphens, max 80. Ringkasan (excerpt) max 300 characters, shown in the list and link previews. Tags: comma separated, max 200 characters. Cover image (optional): a URL, ideally 1200\xD7630. Links must start with https://."
-};
+var DEFAULT_PROFILE = { name: "", about: "", interests: "", examples: "" };
 function getProfile() {
   return { ...DEFAULT_PROFILE, ...getSetting("profile", {}) };
 }
 function getBlog() {
-  return { ...DEFAULT_BLOG, ...getSetting("blog", {}) };
+  return normalizeBlog(getSetting("blog", null));
 }
 function getTiers() {
   return { quick: null, balanced: null, deep: null, ...getSetting("tiers", {}) };
@@ -8447,7 +8592,7 @@ function getWriting(id) {
   const r = db().$client.prepare("SELECT * FROM writings WHERE id = ?").get(id);
   return r ? toWriting(r) : null;
 }
-var slugify = (s) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80).replace(/-+$/, "");
+var slugify = (s, max = 80) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, max).replace(/-+$/, "");
 function saveWriting(w) {
   const s = db().$client, now3 = Date.now();
   const brief2 = JSON.stringify(Object.fromEntries(Object.entries(w.brief || {}).filter(([, v]) => v != null && String(v).trim()).map(([k, v]) => [k, String(v).trim()])));
@@ -8747,7 +8892,7 @@ var BRIEF = [
     q: { en: "Who is speaking?", id: "Siapa yang berbicara?" },
     why: { en: "The originator starts the communication. Whose voice it is, and why they should be believed, changes how every sentence is read.", id: "Pembuat pesan adalah yang memulai komunikasi. Suara siapa yang dipakai, dan kenapa ia layak dipercaya, mengubah cara setiap kalimat dibaca." },
     how: { en: "Say whose name it goes out under and what gives that voice credibility (experience, role, results).", id: "Sebutkan atas nama siapa tulisan ini keluar dan apa yang membuat suara itu kredibel (pengalaman, peran, hasil)." },
-    examples: { en: ["Me, as an Informatics student who builds apps", "Me, on my portfolio blog", "A guest voice: explaining as a tutor would"], id: ["Saya, sebagai mahasiswa Informatika yang membuat aplikasi", "Saya, di blog portofolio saya", "Suara tamu: menjelaskan seperti tutor"] },
+    examples: { en: ["Me, as a student of the subject", "Me, as someone who works in this field", "A guest voice: explaining as a tutor would"], id: ["Saya, sebagai mahasiswa di bidang ini", "Saya, sebagai orang yang bekerja di bidang ini", "Suara tamu: menjelaskan seperti tutor"] },
     fallback: { en: "You, in your own voice.", id: "Kamu, dengan suaramu sendiri." }
   },
   {
@@ -8758,7 +8903,7 @@ var BRIEF = [
     q: { en: "Who will read it, and do you know them?", id: "Siapa yang akan membaca, dan apakah kamu mengenal mereka?" },
     why: { en: "A real audience is people you know or know of (your class, a lecturer, one client). An anticipated audience is people you hope or expect to reach (followers, strangers who search). It decides what you explain, which words you use and how they may react.", id: "Audiens nyata adalah orang yang kamu kenal atau ketahui (kelasmu, dosen, satu klien). Audiens yang diantisipasi adalah orang yang kamu harap atau perkirakan terjangkau (pengikut, orang asing yang mencari). Ini menentukan apa yang perlu dijelaskan, kata yang dipakai, dan bagaimana reaksi mereka." },
     how: { en: "Name the group, say real or anticipated, what they already know, what they care about, and how they might react.", id: "Sebutkan kelompoknya, nyata atau diantisipasi, apa yang sudah mereka tahu, apa yang mereka pedulikan, dan kemungkinan reaksinya." },
-    examples: { en: ["Real: my lecturer and 30 classmates", "Anticipated: Indonesian readers who find my blog through Google", "Anticipated: recruiters checking my portfolio"], id: ["Nyata: dosen dan 30 teman sekelas", "Diantisipasi: pembaca Indonesia yang menemukan blogku lewat Google", "Diantisipasi: rekruter yang melihat portofolioku"] },
+    examples: { en: ["Real: my lecturer and 30 classmates", "Anticipated: Indonesian readers who find my blog through Google", "Anticipated: people in my field reading on LinkedIn"], id: ["Nyata: dosen dan 30 teman sekelas", "Diantisipasi: pembaca Indonesia yang menemukan blogku lewat Google", "Diantisipasi: orang di bidangku yang membaca di LinkedIn"] },
     fallback: { en: "No fallback: this one is needed.", id: "Tidak ada bawaan: yang ini wajib." }
   },
   {
@@ -8769,7 +8914,7 @@ var BRIEF = [
     q: { en: "What genre or medium?", id: "Genre atau medianya apa?" },
     why: { en: "Genre is the mode you communicate in. Each one has conventions readers expect: length, structure, tone, layout. Breaking them should be a choice, not an accident.", id: "Genre adalah bentuk kamu berkomunikasi. Tiap genre punya konvensi yang diharapkan pembaca: panjang, struktur, nada, tata letak. Melanggarnya harus jadi pilihan, bukan kebetulan." },
     how: { en: "Name the form and where it will appear.", id: "Sebutkan bentuknya dan di mana akan tampil." },
-    examples: { en: ["Blog post on my portfolio", "Academic essay for a course", "LinkedIn post", "Technical tutorial with code", "Thread on X", "Presentation script"], id: ["Tulisan blog di portofolioku", "Esai akademik untuk mata kuliah", "Postingan LinkedIn", "Tutorial teknis dengan kode", "Thread di X", "Naskah presentasi"] },
+    examples: { en: ["Blog post", "Academic essay for a course", "LinkedIn post", "Technical tutorial with code", "Thread on X", "Presentation script"], id: ["Tulisan blog", "Esai akademik untuk mata kuliah", "Postingan LinkedIn", "Tutorial teknis dengan kode", "Thread di X", "Naskah presentasi"] },
     fallback: { en: "No fallback: this one is needed.", id: "Tidak ada bawaan: yang ini wajib." }
   },
   {
@@ -8780,7 +8925,7 @@ var BRIEF = [
     q: { en: "Why are you writing it?", id: "Kenapa kamu menulisnya?" },
     why: { en: "Purpose is your reason, and there is often more than one: what the text does for the reader (inform, persuade, entertain, reflect, call to action) and what you want from it (a good grade, leads, attention, connection).", id: "Tujuan adalah alasanmu, dan sering lebih dari satu: apa yang dilakukan teks untuk pembaca (memberi info, membujuk, menghibur, merefleksikan, mengajak bertindak) dan apa yang kamu inginkan darinya (nilai bagus, prospek, perhatian, kedekatan)." },
     how: { en: "Pick the main purpose, add a second if there is one, and say what the reader should think, feel or do afterwards.", id: "Pilih tujuan utama, tambahkan tujuan kedua kalau ada, dan sebutkan apa yang harus dipikirkan, dirasakan, atau dilakukan pembaca setelahnya." },
-    examples: { en: ["Inform: explain how compound interest works", "Persuade: start using version control early", "Reflect on a project I built, and show recruiters my thinking"], id: ["Memberi info: menjelaskan cara kerja bunga majemuk", "Membujuk: mulai pakai version control sejak awal", "Merefleksikan proyek yang kubuat, sekaligus menunjukkan cara berpikirku ke rekruter"] },
+    examples: { en: ["Inform: explain how compound interest works", "Persuade: start using version control early", "Reflect on a project I finished, and what I would change"], id: ["Memberi info: menjelaskan cara kerja bunga majemuk", "Membujuk: mulai pakai version control sejak awal", "Merefleksikan proyek yang kuselesaikan, dan apa yang akan kuubah"] },
     fallback: { en: "No fallback: this one is needed.", id: "Tidak ada bawaan: yang ini wajib." }
   },
   {
@@ -8890,7 +9035,7 @@ var BRIEF = [
     q: { en: "If it's public: how will it age?", id: "Kalau publik: bagaimana jejaknya nanti?" },
     why: { en: "Every post leaves a digital footprint that may never go away. Ask how it would read to a future employer, client or admissions office.", id: "Setiap postingan meninggalkan jejak digital yang mungkin tidak pernah hilang. Tanyakan bagaimana tulisan ini dibaca oleh calon atasan, klien, atau panitia penerimaan nanti." },
     how: { en: "Say yes, it's public, and anything you don't want tied to your name.", id: "Sebutkan ya, ini publik, dan hal apa yang tidak ingin dikaitkan dengan namamu." },
-    examples: { en: ["Public on my portfolio blog: recruiters will read it", "Private, only my lecturer sees it", "Public, but no opinions about my current workplace"], id: ["Publik di blog portofolio: rekruter akan membacanya", "Privat, hanya dosen yang melihat", "Publik, tapi tanpa opini tentang tempat kerjaku sekarang"] },
+    examples: { en: ["Public on my blog: anyone can find it", "Private, only my lecturer sees it", "Public, but no opinions about my current workplace"], id: ["Publik di blogku: siapa saja bisa menemukannya", "Privat, hanya dosen yang melihat", "Publik, tapi tanpa opini tentang tempat kerjaku sekarang"] },
     fallback: { en: "Claude adds a short footprint check for anything public.", id: "Claude menambahkan cek jejak digital singkat untuk tulisan publik." }
   }
 ];
@@ -8934,26 +9079,30 @@ var WORKFLOW = [
   "7. Offer to save it. Only after the user agrees, call neuron_save_writing with the brief. To save a revision, pass the same id."
 ];
 function blogPreset(p, b) {
-  return {
-    originator: `${p.name}: ${p.about}`,
-    audience: `Anticipated: ${b.audience}`,
-    genre: `Blog post on ${b.name}${b.url ? ` (${b.url}${b.section})` : ` (${b.section})`}`,
-    language: b.lang === "id" ? "Indonesian, natural and clear (not stiff EYD), English terms kept where readers know them" : "English, plain and clear",
-    expectations: b.format,
-    style: b.voice,
-    visuals: "Subheadings (##), short paragraphs; a table, list or code block where it helps; optional cover image 1200\xD7630",
+  const plat = PLATFORMS[b.platform] || PLATFORMS.markdown;
+  const where = b.name ? `${b.name}${b.url ? ` (${b.url})` : ""}` : plat.name.en;
+  const out = {
+    genre: `Blog post on ${where}`,
+    language: b.lang === "id" ? "Indonesian, natural and clear (not stiff), English terms kept where readers know them" : "English, plain and clear",
+    expectations: formatRules(b),
+    visuals: "Subheadings (##), short paragraphs; a table, list or code block where it helps; optional cover image",
     material: "My research in Neuron (concepts, sources, notes), cited with links; anything not from my sources must be checked and cited",
-    footprint: "Public on my portfolio: recruiters and clients may read it"
+    footprint: "Public: anyone, including future employers or clients, may read it"
   };
+  const who = [p.name, p.about].filter(Boolean).join(": ");
+  if (who) out.originator = who;
+  if (b.audience) out.audience = `Anticipated: ${b.audience}`;
+  if (b.voice) out.style = b.voice;
+  return out;
 }
 var BLOG_STEPS = [
   "1. Call neuron_research_pack with the topic. Tell the user in 3-6 bullets what their map already has (concepts, their definitions, sources, notes) and what is missing.",
   "2. If something important is missing, offer to research it (web search if you have it). Keep every fact with its source and link. Never present your own knowledge as the user's research.",
   "3. Run the brief from neuron_writing_guide. The 'prefilled' answers come from the user's Settings: show them as one short list to confirm or change, and ask only the open core questions (purpose, stance, context, culture) with guidance and examples.",
   "4. Propose an angle and an outline (title, 4-6 ## sections, the technique) and wait for an OK.",
-  "5. Write the post in Markdown following blog_format exactly: no HTML, start with ## subheadings (the page shows the title), short paragraphs, links as [text](https://...). End with a '## Sumber' (Indonesian) or '## Sources' section listing every source with its link.",
-  "6. Also write: a title (max 140 characters), a slug (lowercase-words-with-hyphens, max 80), a ringkasan/excerpt (max 300 characters, makes people click), 3-6 comma-separated tags, and an optional cover image idea.",
-  "7. Add short Rhetorical notes and a digital footprint check. Offer to save; on OK call neuron_save_writing with brief, post (slug, excerpt, tags, cover_url, sources) and the concepts used. Tell the user it's in Neuron \u2192 Writing, ready to copy field by field into their blog admin."
+  "5. Write the post in Markdown following blog_format exactly (it depends on the user's blog platform): start with ## subheadings (the title is a separate field), short paragraphs, links as [text](https://...). End with a '## Sumber' (Indonesian) or '## Sources' section listing every source with its link.",
+  "6. Also write the fields the platform uses (see blog: has_slug, has_tags, excerpt_label and the limits in blog_format): a title, a slug, the summary/subtitle, tags, and an optional cover image idea.",
+  "7. Add short Rhetorical notes and a digital footprint check. Offer to save; on OK call neuron_save_writing with brief, post (slug, excerpt, tags, cover_url, sources) and the concepts used. Tell the user it's in Neuron \u2192 Writing, ready to copy field by field into their blog editor or download as a .md file."
 ];
 
 // mcp/server.ts
@@ -9013,8 +9162,8 @@ var TOOLS = [
         suggested_links_waiting: g2.links.filter((l) => l.status === "suggested").length,
         glossary_terms: g2.glossary.length,
         language: g2.prefs.lang,
-        learner: g2.profile,
-        blog: { name: g2.blog.name, url: g2.blog.url || null, language: g2.blog.lang },
+        learner: g2.profile.name || g2.profile.about ? g2.profile : "No profile yet (Settings \u2192 About you)",
+        blog: { platform: PLATFORMS[g2.blog.platform].name.en, name: g2.blog.name || null, url: g2.blog.url || null, language: g2.blog.lang },
         saved_writing: listWritings().length
       };
     }
@@ -9336,7 +9485,7 @@ var TOOLS = [
       const L = a.lang === "id" || a.lang === "en" ? a.lang : g2.prefs.lang === "id" ? "id" : "en";
       const blog = a.preset === "blog";
       return {
-        ...blog ? { blog_steps: BLOG_STEPS, prefilled: blogPreset(g2.profile, g2.blog), blog_format: g2.blog.format, blog: g2.blog, still_ask: ["purpose", "stance", "context", "culture"] } : {},
+        ...blog ? { blog_steps: BLOG_STEPS, prefilled: blogPreset(g2.profile, g2.blog), blog_format: formatRules(g2.blog), blog: { ...g2.blog, platform_name: PLATFORMS[g2.blog.platform].name.en, has_slug: PLATFORMS[g2.blog.platform].hasSlug, has_tags: PLATFORMS[g2.blog.platform].hasTags, excerpt_label: PLATFORMS[g2.blog.platform].excerpt.en }, still_ask: ["purpose", "stance", "context", "culture", ...!g2.profile.name && !g2.profile.about ? ["originator"] : [], ...!g2.blog.audience ? ["audience"] : []] } : {},
         learner: g2.profile,
         steps: WORKFLOW,
         brief: ["agents", "conditions", "craft"].map((g3) => ({
@@ -9362,9 +9511,9 @@ var TOOLS = [
         concepts: { type: "array", items: str, description: "Ids or labels of concepts it draws on" },
         lang: { type: "string", enum: ["en", "id"] },
         post: { type: "object", description: "For a blog post: the extra fields of the blog's admin form", properties: {
-          slug: { ...str, description: "lowercase-words-with-hyphens, max 80" },
-          excerpt: { ...str, description: "Ringkasan, max 300 characters" },
-          tags: { ...str, description: "Comma separated, max 200 characters" },
+          slug: { ...str, description: "lowercase-words-with-hyphens (limit in blog settings)" },
+          excerpt: { ...str, description: "Summary / subtitle / meta description (limit in blog settings)" },
+          tags: { ...str, description: "Comma separated" },
           cover_url: { ...str, description: "Optional image URL, ideally 1200x630" },
           sources: { type: "array", items: { type: "object", required: ["title"], properties: { title: str, url: str } } }
         } }
@@ -9376,18 +9525,20 @@ var TOOLS = [
       let post = null;
       const warnings = [];
       if (a.post && typeof a.post === "object") {
-        const slug2 = slugify(String(a.post.slug || title));
-        const excerpt = String(a.post.excerpt || "").trim(), tags = String(a.post.tags || "").split(",").map((x) => x.trim()).filter(Boolean).join(", ");
-        if (title.length > 140) warnings.push(`Title is ${title.length} characters; the blog allows 140.`);
-        if (excerpt.length > 300) warnings.push(`Excerpt is ${excerpt.length} characters; the blog allows 300.`);
-        if (tags.length > 200) warnings.push(`Tags are ${tags.length} characters; the blog allows 200.`);
-        if (/<\/?[a-z][^>]*>/i.test(String(a.body))) warnings.push("The body contains HTML tags; the blog shows them as plain text. Use Markdown instead.");
+        const b = graph().blog, plat = PLATFORMS[b.platform];
+        const slug2 = slugify(String(a.post.slug || title), b.slugMax);
+        const excerpt = String(a.post.excerpt || "").trim(), tagList = String(a.post.tags || "").split(",").map((x) => x.trim()).filter(Boolean), tags = tagList.join(", ");
+        if (title.length > b.titleMax) warnings.push(`Title is ${title.length} characters; this blog's limit is ${b.titleMax}.`);
+        if (excerpt.length > b.excerptMax) warnings.push(`${plat.excerpt.en} is ${excerpt.length} characters; the limit is ${b.excerptMax}.`);
+        if (plat.hasTags && b.tagsMax > 0 && tagList.length > b.tagsMax) warnings.push(`${tagList.length} tags; this blog takes up to ${b.tagsMax}.`);
+        if (!b.allowHtml && /<\/?[a-z][^>]*>/i.test(String(a.body))) warnings.push("The body contains HTML tags; this blog doesn't accept HTML. Use Markdown instead.");
+        if ((b.platform === "medium" || b.platform === "substack") && /^\s*\|.*\|\s*$/m.test(String(a.body))) warnings.push(`${plat.name.en} doesn't support tables; turn them into lists.`);
         if (/\]\((?!https?:|mailto:|\/|#)/i.test(String(a.body))) warnings.push("Some links don't start with https://; the blog drops them.");
         const sources2 = Array.isArray(a.post.sources) ? a.post.sources.map((x) => ({ title: String(x.title || ""), ...x.url ? { url: String(x.url) } : {} })).filter((x) => x.title) : [];
         post = { slug: slug2, excerpt, tags, coverUrl: String(a.post.cover_url || "").trim(), sources: sources2 };
       }
       const id = saveWriting({ id: a.id ? Number(a.id) : null, kind: "writing", title: title.slice(0, 200), body: String(a.body), brief: a.brief || {}, conceptIds: ids, lang: a.lang || null, post });
-      return { saved: true, id, linked_concepts: ids, ...post ? { slug: post.slug } : {}, ...warnings.length ? { fix_these: warnings } : {}, ...unknown.length ? { not_found: unknown } : {}, note: post ? "It's in Neuron \u2192 Writing with a Blog post panel: the user copies each field into their blog admin. If fix_these is present, fix it and save again with the same id." : "It's in the Writing menu of the app." };
+      return { saved: true, id, linked_concepts: ids, ...post ? { slug: post.slug } : {}, ...warnings.length ? { fix_these: warnings } : {}, ...unknown.length ? { not_found: unknown } : {}, note: post ? "It's in Neuron \u2192 Writing with a Blog post panel: the user copies each field into their blog editor or downloads a .md file. If fix_these is present, fix it and save again with the same id." : "It's in the Writing menu of the app." };
     }
   },
   {

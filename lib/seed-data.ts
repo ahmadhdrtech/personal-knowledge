@@ -1,4 +1,4 @@
-/* Demo map: 15 concepts across Haidar's four topics. Used by "Reset to the demo map" and the seed script. */
+/* Demo map: 15 concepts across four topics (tech, science, money, ideas). Used by "Reset to the demo map" and the seed script. */
 /* eslint-disable */
 // @ts-nocheck
 const B=(en,id)=>({en,id});

@@ -5,7 +5,11 @@ import type { Concept, Confidence, Graph, Lang } from "../types";
 export const RULES =
   "You are a careful tutor inside a learner’s personal knowledge app. Ground everything in the concept information and glossary below. The learner’s own definitions and the verified glossary are authoritative: if your own knowledge conflicts with them, follow them and mention the difference. If a term isn’t covered and you aren’t confident about it, say so instead of guessing. Never invent sources.";
 
-export const learnerLine = (g: Graph) => `THE LEARNER: ${g.profile.name}. ${g.profile.about} Interests: ${g.profile.interests}.`;
+export const learnerLine = (g: Graph) => {
+  const p = g.profile, bits = [p.name && `${p.name}.`, p.about, p.interests && `Interests: ${p.interests}.`].filter(Boolean);
+  return bits.length ? `THE LEARNER: ${bits.join(" ")}` : "THE LEARNER: no profile yet; keep examples general and everyday.";
+};
+export const exampleSource = (g: Graph) => g.profile.examples || g.profile.interests || "everyday life and work";
 
 export function glossaryText(g: Graph) {
   const lines = g.glossary.map((x) => `- ${x.term}: ${x.definition}`);
@@ -53,7 +57,7 @@ export function essayGradePrompt(g: Graph, n: Concept, q: { en: string }, rubric
 }
 
 export function discussSystem(g: Graph, n: Concept) {
-  return `${RULES}\n${learnerLine(g)}\n\n${conceptContext(g, n)}\n\nYou are discussing this concept with the learner. Keep answers under 160 words, use one concrete example from the learner’s interests (${g.profile.examples}), and end with one short question that checks their understanding. When you introduce a key term, give it in English and Indonesian once, like “reach (jangkauan)”. ${langLine(g.prefs.lang)} If the learner uses a term you don’t know and it isn’t in the glossary, ask them to define it instead of guessing.`;
+  return `${RULES}\n${learnerLine(g)}\n\n${conceptContext(g, n)}\n\nYou are discussing this concept with the learner. Keep answers under 160 words, use one concrete example from the learner’s interests (${exampleSource(g)}), and end with one short question that checks their understanding. When you introduce a key term, give it in English and Indonesian once, like “reach (jangkauan)”. ${langLine(g.prefs.lang)} If the learner uses a term you don’t know and it isn’t in the glossary, ask them to define it instead of guessing.`;
 }
 export const DISCUSS_ACK = "Understood. I’ll stay grounded in the concept information and the learner’s definitions.";
 
@@ -104,7 +108,7 @@ VERIFIED GLOSSARY (authoritative):
 ${glossaryText(g)}
 ${focus.length ? `\nCONCEPTS THE LEARNER IS ASKING ABOUT:\n${focus.map((c) => conceptContext(g, c)).join("\n\n")}\n` : ""}${opts.passages.length ? `\nRELEVANT PASSAGES FROM THE LEARNER’S SOURCES:\n${opts.passages.map((p) => `[${p.title}${p.page ? `, p. ${p.page}` : ""}] ${p.text.slice(0, 900)}`).join("\n\n")}\n` : ""}
 How to answer:
-- ${langLine(g.prefs.lang)} Keep it under 180 words unless asked for more. Use one concrete example when explaining, from the learner’s interests (${g.profile.examples}).
+- ${langLine(g.prefs.lang)} Keep it under 180 words unless asked for more. Use one concrete example when explaining, from the learner’s interests (${exampleSource(g)}).
 - When you mention a concept from the map, write its id in double brackets, like [[${g.concepts[0]?.id || "algorithm"}]]. Only use ids from the list above.
 - When you cite a passage, name the source title (and page if given).
 - If a useful next step exists, add up to 3 action lines at the very end, each on its own line, exactly in this form:

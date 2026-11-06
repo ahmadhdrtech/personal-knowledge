@@ -9,6 +9,7 @@ import { api, errText, useGraph } from "@/components/store";
 import { fmtDate, NodeBtn } from "@/components/ui";
 import { BRIEF, FROM, GROUPS, KINDS, TECHNIQUES, type BriefKey } from "@/lib/writing-guide";
 import type { PostFields, Writing } from "@/lib/types";
+import { PLATFORMS, toMarkdownFile } from "@/lib/blog";
 
 const LABEL: Record<BriefKey, { en: string; id: string }> = {
   originator: { en: "Speaker", id: "Pembicara" }, audience: { en: "Audience", id: "Audiens" }, genre: { en: "Genre", id: "Genre" },
@@ -168,32 +169,41 @@ function Guide() {
 
 /** The fields of the blog's admin form, each with a copy button, in the order the form asks for them. */
 function BlogPanel({ w }: { w: Writing }) {
-  const { t, toast, graph } = useGraph();
-  const p = w.post!, blog = graph?.blog;
+  const { t, toast, graph, lang } = useGraph();
+  const p = w.post!, blog = graph?.blog, P = PLATFORMS[blog?.platform || "markdown"], L = lang === "id" ? "id" : "en";
   const copy = async (v: string, what: string) => { try { await navigator.clipboard.writeText(v); toast(t(`${what} copied`, `${what} disalin`)); } catch { toast(t("Couldn’t copy", "Tidak bisa menyalin")); } };
-  const rows: { k: string; label: string; v: string; max?: number; mono?: boolean }[] = [
-    { k: "title", label: t("Title (Judul)", "Judul"), v: w.title, max: 140 },
-    { k: "slug", label: "Slug", v: p.slug, max: 80, mono: true },
-    { k: "excerpt", label: t("Summary (Ringkasan)", "Ringkasan"), v: p.excerpt, max: 300 },
-    { k: "body", label: t("Body (Isi), Markdown", "Isi (Markdown)"), v: w.body, max: 100000 },
-    { k: "tags", label: t("Tags (Tag)", "Tag"), v: p.tags, max: 200 },
-    { k: "cover", label: t("Cover image (Gambar sampul)", "Gambar sampul"), v: p.coverUrl, max: 500, mono: true },
+  const tagCount = p.tags.split(",").map((x) => x.trim()).filter(Boolean).length;
+  const rows: { k: string; label: string; v: string; max?: number; count?: string; over?: boolean; mono?: boolean }[] = [
+    { k: "title", label: t("Title", "Judul"), v: w.title, max: blog?.titleMax },
+    ...(P.hasSlug ? [{ k: "slug", label: "Slug", v: p.slug, max: blog?.slugMax, mono: true }] : []),
+    { k: "excerpt", label: P.excerpt[L], v: p.excerpt, max: blog?.excerptMax },
+    { k: "body", label: t("Body (Markdown)", "Isi (Markdown)"), v: w.body },
+    ...(P.hasTags ? [{ k: "tags", label: t("Tags", "Tag"), v: p.tags, count: blog?.tagsMax ? `${tagCount}/${blog.tagsMax} ${t("tags", "tag")}` : undefined, over: !!blog?.tagsMax && tagCount > blog.tagsMax }] : []),
+    { k: "cover", label: t("Cover image", "Gambar sampul"), v: p.coverUrl, mono: true },
   ];
-  const admin = blog?.url ? `${blog.url}${blog.adminPath}` : null;
+  const admin = blog?.url ? `${blog.url}${blog.adminPath || ""}` : null;
+  const download = () => {
+    const file = toMarkdownFile({ title: w.title, body: w.body, slug: p.slug, excerpt: p.excerpt, tags: p.tags, coverUrl: p.coverUrl, sources: p.sources });
+    const url = URL.createObjectURL(new Blob([file], { type: "text/markdown;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = `${p.slug || "post"}.md`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
   return (
     <div className="blog-panel">
-      <div className="split" style={{ marginBottom: 6 }}>
-        <h4 style={{ margin: 0 }}>{t("Blog post", "Tulisan blog")}<Hint>{t("Open your blog admin (New post), then copy each field into the box with the same name. Keep the status as Draft, preview it, then publish.", "Buka admin blogmu (Tulisan baru), lalu salin tiap kolom ke kotak dengan nama yang sama. Biarkan status Draf, cek pratinjau, lalu terbitkan.")}</Hint></h4>
-        {admin ? <a className="btn small" href={admin} target="_blank" rel="noreferrer">{t("Open blog admin", "Buka admin blog")}</a>
-          : <span className="muted small">{t("Admin page:", "Halaman admin:")} <span className="mono">{blog?.adminPath}</span> <Link className="link" href="/settings">{t("add your site address", "isi alamat situsmu")}</Link></span>}
+      <div className="split" style={{ marginBottom: 6, flexWrap: "wrap", gap: 8 }}>
+        <h4 style={{ margin: 0 }}>{t("Blog post", "Tulisan blog")} <span className="muted small" style={{ fontWeight: 400, marginLeft: 6 }}>{P.name[L]}</span><Hint>{t("Open your blog editor, then copy each field into the box with the same name, or download the .md file (with front matter) for a static site. Save as a draft, preview, then publish. Change the platform and limits in Settings → Your blog.", "Buka editor blogmu, lalu salin tiap kolom ke kotak dengan nama yang sama, atau unduh file .md (dengan front matter) untuk situs statis. Simpan sebagai draf, cek pratinjau, lalu terbitkan. Ubah platform dan batasnya di Pengaturan → Blogmu.")}</Hint></h4>
+        <span className="inline">
+          <button className="btn small" onClick={download}>{t("Download .md", "Unduh .md")}</button>
+          {admin ? <a className="btn small" href={admin} target="_blank" rel="noreferrer">{t("Open blog editor", "Buka editor blog")}</a>
+            : <Link className="link small" href="/settings">{t("Set up your blog", "Atur blogmu")}</Link>}
+        </span>
       </div>
       <table className="t post-fields"><tbody>{rows.map((r) => {
-        const over = r.max != null && r.v.length > r.max;
+        const over = r.over || (r.max != null && r.v.length > r.max);
         return (
           <tr key={r.k}>
             <th>{r.label}</th>
             <td className={r.mono ? "mono" : undefined}>{r.k === "body" ? <span className="muted">{t(`${r.v.split(/\s+/).filter(Boolean).length} words`, `${r.v.split(/\s+/).filter(Boolean).length} kata`)}</span> : r.v || <span className="muted">–</span>}
-              {r.max && r.k !== "body" && r.v && <span className={`small ${over ? "err-text" : "muted"}`}> · {r.v.length}/{r.max}</span>}</td>
+              {r.v && (r.count || r.max) && <span className={`small ${over ? "err-text" : "muted"}`}> · {r.count || `${r.v.length}/${r.max}`}</span>}</td>
             <td style={{ width: 1 }}>{r.v && <button className="btn small" onClick={() => copy(r.v, r.label)}>{t("Copy", "Salin")}</button>}</td>
           </tr>
         );
@@ -210,10 +220,10 @@ function PostEditor({ p, set }: { p: PostFields; set: (p: PostFields) => void })
     <div className="blog-panel">
       <h4 style={{ margin: "0 0 6px" }}>{t("Blog post fields", "Kolom tulisan blog")}</h4>
       <div className="grid2" style={{ gap: "0 16px" }}>
-        <label className="field-group" style={{ display: "block" }}><span className="lab">Slug</span><input className="field mono" value={p.slug} maxLength={80} onChange={(e) => set({ ...p, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-") })} /></label>
-        <label className="field-group" style={{ display: "block" }}><span className="lab">{t("Tags", "Tag")}</span><input className="field" value={p.tags} maxLength={200} onChange={on("tags")} /></label>
+        <label className="field-group" style={{ display: "block" }}><span className="lab">Slug</span><input className="field mono" value={p.slug} onChange={(e) => set({ ...p, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-") })} /></label>
+        <label className="field-group" style={{ display: "block" }}><span className="lab">{t("Tags", "Tag")}</span><input className="field" value={p.tags} onChange={on("tags")} /></label>
       </div>
-      <label className="field-group" style={{ display: "block" }}><span className="lab">{t("Summary", "Ringkasan")} <span className="muted small">{p.excerpt.length}/300</span></span><textarea className="field" rows={2} maxLength={300} value={p.excerpt} onChange={on("excerpt")} /></label>
+      <label className="field-group" style={{ display: "block" }}><span className="lab">{t("Summary", "Ringkasan")} <span className="muted small">{p.excerpt.length}</span></span><textarea className="field" rows={2} value={p.excerpt} onChange={on("excerpt")} /></label>
       <label className="field-group" style={{ display: "block" }}><span className="lab">{t("Cover image URL", "URL gambar sampul")}</span><input className="field mono" value={p.coverUrl} maxLength={500} onChange={on("coverUrl")} /></label>
     </div>
   );

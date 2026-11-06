@@ -1,3 +1,5 @@
+import type { BlogSettings } from "./blog";
+export type { BlogSettings } from "./blog";
 // Shared types. Safe to import from client and server code.
 
 export type Bi = { en: string; id: string };
@@ -136,14 +138,12 @@ export interface UsageRow {
   error: string | null;
 }
 
-/** Blog fields for a piece meant for the blog (matches the portfolio admin form). */
+/** Blog fields for a piece meant for a blog: the extra fields most blog editors ask for. */
 export type PostFields = { slug: string; excerpt: string; tags: string; coverUrl: string; sources: { title: string; url?: string }[] };
 export type Writing = { id: number; kind: "writing" | "note"; title: string; body: string; brief: Record<string, string>; conceptIds: string[]; lang: string | null; post: PostFields | null; createdAt: number; updatedAt: number };
 
 /** Who the learner is. Goes into every AI prompt so examples fit their interests. */
 export type Profile = { name: string; about: string; interests: string; examples: string };
-/** Where research turns into posts (Writing menu and the Claude Desktop blog flow). */
-export type BlogSettings = { name: string; url: string; section: string; adminPath: string; lang: "en" | "id"; audience: string; voice: string; format: string };
 
 /** One question asked to find what the learner already understands. */
 export type ProbeItem = { concept: string | null; question: string; answer: string; verdict: "knows" | "partly" | "gap" | "misconception"; confidence?: Confidence | null; note?: string };

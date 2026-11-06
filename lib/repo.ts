@@ -1,13 +1,14 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import { getDb, schema as S } from "./db";
 import { seedDemo, clearMap as clearMapDb } from "./db/seed";
+import { normalizeBlog, type BlogSettings } from "./blog";
 import { OFFLINE, SAMPLE_TITLE } from "./seed-data";
 import { clampMastery, essayDelta, LINK_TYPES, mcqDelta, slug } from "./logic";
 import { bestChunk, chunkText } from "./extract";
 import { reviewInfo, scheduleReview, rateMcq, rateEssay } from "./review";
 import type {
   Bi, Calibration, Concept, Confidence, Depth, Domain, Graph, GlossaryItem, ImportReport, Link, LinkType,
-  McqQuestion, Prefs, SourceRow, Writing, Profile, BlogSettings, PostFields, Lesson, LessonStep, ProbeItem, LessonResult,
+  McqQuestion, Prefs, SourceRow, Writing, Profile, PostFields, Lesson, LessonStep, ProbeItem, LessonResult,
 } from "./types";
 
 const db = () => getDb();
@@ -39,30 +40,15 @@ export function setPrefs(p: Partial<Prefs>) {
   setSetting("prefs", next);
   return next;
 }
-export const DEFAULT_PROFILE: Profile = {
-  name: "Ahmad Haidar",
-  about: "University student in Informatics (Teknik Informatika). Builds web and mobile apps.",
-  interests: "Technology and programming; science and nature; business and money; history, philosophy and society",
-  examples: "software and AI, physics and biology, startups and personal finance, history and philosophy",
-};
-export const DEFAULT_BLOG: BlogSettings = {
-  name: "Ahmad Haidar · Portfolio (Tulisan)", url: "", section: "/tulisan", adminPath: "/admin/tulisan/baru", lang: "id",
-  audience: "Indonesian readers curious about tech, science, money and ideas: students, developers, recruiters",
-  voice: "Clear, curious and honest; explains simply with real examples; no hype",
-  format: "Markdown only, no HTML (it is shown as text). The page shows the title, so start the body with ## subheadings. Title max 140 characters. Slug: lowercase words joined by hyphens, max 80. Ringkasan (excerpt) max 300 characters, shown in the list and link previews. Tags: comma separated, max 200 characters. Cover image (optional): a URL, ideally 1200×630. Links must start with https://.",
-};
+export const DEFAULT_PROFILE: Profile = { name: "", about: "", interests: "", examples: "" };
 const clean = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 export function getProfile(): Profile { return { ...DEFAULT_PROFILE, ...getSetting<Partial<Profile>>("profile", {}) }; }
 export function setProfile(p: Partial<Profile>) {
   const cur = getProfile();
   setSetting("profile", { name: clean(p.name ?? cur.name, 80), about: clean(p.about ?? cur.about, 400), interests: clean(p.interests ?? cur.interests, 400), examples: clean(p.examples ?? cur.examples, 300) });
 }
-export function getBlog(): BlogSettings { return { ...DEFAULT_BLOG, ...getSetting<Partial<BlogSettings>>("blog", {}) }; }
-export function setBlog(b: Partial<BlogSettings>) {
-  const cur = getBlog();
-  const pick = <K extends keyof BlogSettings>(k: K, max: number) => clean(b[k] ?? cur[k], max);
-  setSetting("blog", { name: pick("name", 120), url: pick("url", 200).replace(/\/+$/, ""), section: pick("section", 80), adminPath: pick("adminPath", 120), lang: b.lang === "en" || b.lang === "id" ? b.lang : cur.lang, audience: pick("audience", 400), voice: pick("voice", 300), format: pick("format", 1500) });
-}
+export function getBlog(): BlogSettings { return normalizeBlog(getSetting<Record<string, unknown> | null>("blog", null)); }
+export function setBlog(b: Partial<BlogSettings>) { setSetting("blog", normalizeBlog({ ...getBlog(), ...b })); }
 export function getTiers(): Record<Depth, number | null> {
   return { quick: null, balanced: null, deep: null, ...getSetting<Record<string, number | null>>("tiers", {}) } as Record<Depth, number | null>;
 }
@@ -493,8 +479,8 @@ export function getWriting(id: number): Writing | null {
   const r = db().$client.prepare("SELECT * FROM writings WHERE id = ?").get(id) as WritingRow | undefined;
   return r ? toWriting(r) : null;
 }
-/** Make a slug the portfolio accepts: lowercase words joined by hyphens, max 80 characters. */
-export const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80).replace(/-+$/, "");
+/** A URL slug: lowercase words joined by hyphens. */
+export const slugify = (s: string, max = 80) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, max).replace(/-+$/, "");
 export function saveWriting(w: { id?: number | null; kind: "writing" | "note"; title: string; body: string; brief?: Record<string, string>; conceptIds?: string[]; lang?: string | null; post?: PostFields | null }): number {
   const s = db().$client, now = Date.now();
   const brief = JSON.stringify(Object.fromEntries(Object.entries(w.brief || {}).filter(([, v]) => v != null && String(v).trim()).map(([k, v]) => [k, String(v).trim()])));
