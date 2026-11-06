@@ -1,0 +1,1150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Neuron knowledge map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EDF0F3;--surface:#F8FAFB;--ink:#1B2236;--muted:#5C6578;--line:#CDD3DC;--edge:#8A93A6;
+  --unseen:#BAC1CC;--shaky:#D99A1E;--solid:#2C8A66;--accent:#3A5BD9;--accent-soft:#E4E9FB;--danger:#B3412F;--danger-soft:#F6E3DF;
+  --c0:#7B52CC;--c1:#2C6FD1;--c2:#C0467A;--c3:#178C99;--c4:#B86E14;--c5:#4E8A2B;--c6:#8E5A3C;--c7:#5560A8;
+  color-scheme:light;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#11151E;--surface:#191F2D;--ink:#E6E9EF;--muted:#9AA3B5;--line:#2C3446;--edge:#69748B;
+    --unseen:#4A5366;--shaky:#E5AA35;--solid:#3DB487;--accent:#8198F3;--accent-soft:#232C4A;--danger:#E07A66;--danger-soft:#3A2420;
+    --c0:#A58AF0;--c1:#6A9EF0;--c2:#E07AA6;--c3:#4CC0CC;--c4:#E0A050;--c5:#86C060;--c6:#C99278;--c7:#8F98E0;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#11151E;--surface:#191F2D;--ink:#E6E9EF;--muted:#9AA3B5;--line:#2C3446;--edge:#69748B;
+  --unseen:#4A5366;--shaky:#E5AA35;--solid:#3DB487;--accent:#8198F3;--accent-soft:#232C4A;--danger:#E07A66;--danger-soft:#3A2420;
+  --c0:#A58AF0;--c1:#6A9EF0;--c2:#E07AA6;--c3:#4CC0CC;--c4:#E0A050;--c5:#86C060;--c6:#C99278;--c7:#8F98E0;color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--paper);color:var(--ink);font-family:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.5;display:flex;flex-direction:column}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bar{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--paper);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:19px;letter-spacing:-.01em;margin-right:6px}
+.brand svg{width:26px;height:26px}
+.search{flex:1;min-width:150px;max-width:320px}
+.field{width:100%;padding:8px 11px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.field::placeholder{color:var(--muted)}
+textarea.field{resize:vertical;line-height:1.5}
+.actions{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--line);background:var(--surface);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:500}
+.btn:hover:not(:disabled){border-color:var(--edge)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .btn.primary{color:#11151E}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.primary{color:#11151E}}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.small{padding:4px 9px;font-size:13px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface);flex:none}
+.seg button{border:0;background:none;padding:6px 10px;font-size:13px;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.sel-wrap{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.sel-wrap select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface)}
+main{flex:1;display:grid;grid-template-columns:1fr 410px;min-height:0}
+#graph{position:relative;min-height:0;overflow:hidden}
+#canvas{width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+#canvas:active{cursor:grabbing}
+.top{position:absolute;top:10px;left:10px;right:10px;display:flex;gap:8px;align-items:flex-start;pointer-events:none}
+.top>*{pointer-events:auto}
+.chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);padding:4px 10px;border-radius:999px;font-size:13px}
+.chip[aria-pressed="false"]{opacity:.45}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.legend{position:absolute;left:10px;bottom:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:12px;color:var(--muted);display:grid;grid-template-columns:auto auto;gap:4px 14px}
+.legend .row{display:flex;align-items:center;gap:7px}
+.legend svg{width:28px;height:12px;flex:none}
+.toast{position:absolute;top:52px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:92%}
+.toast.show{opacity:1}
+aside{border-left:1px solid var(--line);background:var(--surface);overflow-y:auto;padding:20px 22px 48px}
+.link{background:none;border:0;padding:0;color:var(--accent);font-weight:500;text-align:left}
+.link:hover{text-decoration:underline}
+.back{font-size:13px;margin-bottom:12px}
+.tag{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-right:10px}
+h2{font-family:"Newsreader",Georgia,serif;font-weight:500;font-size:29px;line-height:1.15;margin:6px 0 12px;letter-spacing:-.01em}
+h2 .alt{font-size:19px;margin-top:4px}
+h3{font-size:13px;font-weight:600;color:var(--muted);margin:22px 0 8px}
+.alt{display:block;color:var(--muted);font-size:.9em;font-weight:400}
+.summary{font-family:"Newsreader",Georgia,serif;font-size:18px;line-height:1.55;margin:0}
+.summary .alt{font-size:16px;margin-top:8px;font-style:italic}
+.meter{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.meter .track{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.meter .fill{height:100%;border-radius:3px;transition:width .4s ease}
+.tabs{display:flex;flex-wrap:wrap;gap:2px;border-bottom:1px solid var(--line);margin:16px 0 4px}
+.tab{background:none;border:0;padding:8px 9px;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}
+ul.plain{list-style:none;padding:0;margin:0}
+.row-item{padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.row-item:last-child{border-bottom:0}
+.pill{font-size:11px;padding:1px 7px;border-radius:999px;margin-left:6px;white-space:nowrap;color:var(--accent);background:var(--accent-soft)}
+.pill.bad{color:var(--danger);background:var(--danger-soft)}
+.src b{font-weight:500;display:block;font-size:14px}
+.src span{font-size:13px;color:var(--muted)}
+.card{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--paper);margin-bottom:10px}
+.card.dashed{border-style:dashed;border-color:var(--accent)}
+.card.warn{border-color:var(--danger)}
+.card p{margin:0 0 6px}
+.muted{color:var(--muted);font-size:14px}
+.small{font-size:13px}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.prompt{font-family:"Newsreader",Georgia,serif;font-size:19px;line-height:1.4;margin:0 0 14px}
+.kind{font-size:12px;color:var(--muted);margin-bottom:6px}
+.kind.bridge{color:var(--accent)}
+.opt{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:14px}
+.opt:hover:not(:disabled){border-color:var(--edge)}
+.opt.picked{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.opt.right{border-color:var(--solid);box-shadow:inset 3px 0 0 var(--solid)}
+.opt.wrong{border-color:var(--danger);box-shadow:inset 3px 0 0 var(--danger)}
+.opt:disabled{cursor:default}
+.conf{margin-top:6px}
+.conf p{margin:0 0 8px;font-size:14px;font-weight:500}
+.conf .btnrow{margin-top:0}
+.verdict{margin-top:12px;font-size:14px}
+.verdict strong{font-weight:600}
+.err{color:var(--danger);font-size:13px;margin-top:6px}
+.path{list-style:none;padding:0;margin:0;counter-reset:step}
+.path li{position:relative;padding:0 0 16px 30px}
+.path li::before{counter-increment:step;content:counter(step);position:absolute;left:0;top:1px;width:20px;height:20px;border-radius:50%;border:1px solid var(--edge);font-size:11px;display:flex;align-items:center;justify-content:center;color:var(--muted);background:var(--surface)}
+.path li::after{content:"";position:absolute;left:10px;top:23px;bottom:2px;width:1px;background:var(--line)}
+.path li:last-child::after{display:none}
+.path li.here::before{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.path .sub{display:block;font-size:12px;color:var(--muted)}
+.stack{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:8px 0 6px;background:var(--line)}
+.keys{display:flex;gap:14px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.split{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.vocab{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.vocab:last-child{border-bottom:0}
+.vocab b{font-weight:500}
+.vocab .ex{grid-column:1/-1;font-size:13px;color:var(--muted);font-style:italic}
+.chat{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.bubble{padding:10px 12px;border-radius:12px;font-size:14px;line-height:1.55;max-width:92%;white-space:pre-wrap}
+.bubble.me{align-self:flex-end;background:var(--accent-soft)}
+.bubble.ai{align-self:flex-start;background:var(--paper);border:1px solid var(--line)}
+.status{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-top:8px}
+.score{font-family:"Newsreader",Georgia,serif;font-size:34px;line-height:1}
+details summary{cursor:pointer;font-size:14px;font-weight:500;margin-top:8px}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:20px;width:min(640px,94vw);max-height:90vh}
+dialog::backdrop{background:rgba(10,14,24,.45)}
+dialog h2{margin-top:0}
+label.lab{display:block;font-size:13px;font-weight:500;margin:12px 0 5px}
+.hidden{display:none!important}
+/* graph */
+.hull path{fill-opacity:.09;stroke-opacity:.5;stroke-width:1.2;transition:opacity .4s}
+.hull text{font-size:13px;font-weight:600;text-anchor:middle;paint-order:stroke;stroke:var(--paper);stroke-width:4px}
+.hulls.off{opacity:0}
+.hulls{transition:opacity .4s}
+.edge{fill:none;stroke:var(--edge);stroke-width:1.3;transition:opacity .2s}
+.edge.t-related{stroke-opacity:.55}
+.edge.t-contrasts{stroke-dasharray:6 4}
+.edge.t-example_of{stroke-dasharray:1 4;stroke-linecap:round;stroke-width:1.8}
+.edge.suggested{stroke:var(--accent);stroke-dasharray:4 4;stroke-width:1.6;stroke-opacity:1}
+.edge.hot{stroke:var(--ink);stroke-opacity:1}
+.domains .edge{stroke-opacity:.35}
+.node{cursor:pointer;transition:opacity .2s}
+.node .core{stroke:var(--surface);stroke-width:1.5}
+.node .flag{fill:var(--danger);stroke:var(--surface);stroke-width:1.5}
+.node text{font-size:12px;fill:var(--ink);paint-order:stroke;stroke:var(--paper);stroke-width:4px;stroke-linejoin:round;text-anchor:middle;pointer-events:none}
+.node text .sub{fill:var(--muted);font-size:11px}
+.node.sel text{font-weight:600}
+.node.sel .core{stroke:var(--ink);stroke-width:2.5}
+.node.match .core{stroke:var(--accent);stroke-width:3}
+.node:focus{outline:none}
+.node:focus-visible .core{stroke:var(--accent);stroke-width:3}
+.dim{opacity:.15}
+.arrowhead{fill:var(--edge)}
+.arrowhead.hot{fill:var(--ink)}
+.arrowhead.acc{fill:var(--accent)}
+@media (prefers-reduced-motion:no-preference){
+  .edge.suggested{animation:flow 1.2s linear infinite}
+  @keyframes flow{to{stroke-dashoffset:-16}}
+}
+@media (max-width:860px){
+  html,body{height:auto}
+  body{display:block}
+  main{display:block}
+  #graph{height:62vh}
+  aside{border-left:0;border-top:1px solid var(--line)}
+  .legend .lt{display:none}
+  .legend{grid-template-columns:auto}
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <svg viewBox="0 0 26 26" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M13 13L4 5M13 13l9-6M13 13l-2 10M13 13l10 6"/></g><circle cx="13" cy="13" r="4" fill="currentColor"/><circle cx="4" cy="5" r="2" fill="currentColor"/><circle cx="22" cy="7" r="2" fill="currentColor"/><circle cx="11" cy="23" r="2" fill="currentColor"/><circle cx="23" cy="19" r="2" fill="currentColor"/></svg>
+    Neuron
+  </div>
+  <div class="search"><input id="q" class="field" type="search" placeholder="Search concepts" aria-label="Search concepts" autocomplete="off"></div>
+  <div class="seg" id="langSeg" role="group" aria-label="Language">
+    <button data-lang="en">EN</button><button data-lang="id">ID</button><button data-lang="both">EN + ID</button>
+  </div>
+  <div class="actions">
+    <label class="sel-wrap">AI depth
+      <select id="depth"><option value="quick">Quick</option><option value="default">Balanced</option><option value="complex">Deep reasoning</option></select>
+    </label>
+    <button class="btn" id="reviewBtn">Review</button>
+    <button class="btn primary" id="addBtn">Add source</button>
+  </div>
+</header>
+<main>
+  <section id="graph" aria-label="Concept map">
+    <svg id="canvas" role="img" aria-label="Network of concepts, grouped into domains"></svg>
+    <div class="top">
+      <div class="chips" id="chips"></div>
+      <div class="seg" id="viewSeg" role="group" aria-label="View">
+        <button data-view="network">Network</button><button data-view="domains">Domains</button>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </section>
+  <aside id="panel"></aside>
+</main>
+
+<dialog id="addDlg" aria-labelledby="addTitle">
+  <h2 id="addTitle">Add a source</h2>
+  <p class="muted">Paste an article, your notes or a transcript. Claude picks out the key concepts, matches them to concepts you already have, assigns domains, adds English and Indonesian terms, and suggests links for you to approve.</p>
+  <label class="lab" for="srcTitle">Title</label>
+  <input id="srcTitle" class="field" placeholder="e.g. Chapter 3, Consumer Behavior">
+  <label class="lab" for="srcText">Text</label>
+  <textarea id="srcText" class="field" rows="9" placeholder="Paste the text here"></textarea>
+  <div class="err hidden" id="srcErr"></div>
+  <div class="status hidden" id="srcStatus"><span id="srcStatusText">Thinking…</span><button class="btn small" id="srcStop">Stop</button></div>
+  <div class="btnrow">
+    <button class="btn primary" id="srcGo">Find concepts</button>
+    <button class="btn" id="srcSample">Use the sample article</button>
+    <button class="btn" id="srcOffline">Add offline demo</button>
+    <button class="btn" id="srcCancel">Cancel</button>
+  </div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script>
+/* ================= seed data ================= */
+const B=(en,id)=>({en,id});
+const O=arr=>arr.map(([en,id])=>({en,id}));
+const Q=(q,o,a,why,bridge)=>({q,o:O(o),a,why,bridge:bridge||null});
+const FERRY={t:"Ferry Irwandi, How To Be A Good Storyteller",n:"Your notes from the video."};
+const TOPICS0=[
+  {key:"story",en:"Storytelling",id:"Teknik bercerita",c:0},
+  {key:"ads",en:"Paid ads",id:"Iklan berbayar",c:1},
+  {key:"psych",en:"Consumer psychology",id:"Psikologi konsumen",c:2},
+  {key:"learn",en:"Learning science",id:"Ilmu belajar",c:3}
+];
+const NODES0=[
+ {id:"hook",label:B("Hook","Hook (kait pembuka)"),topics:["story","ads"],mastery:70,
+  summary:B("The first one to three seconds of a video. It stops the scroll by opening a question, tension or surprise the viewer wants resolved.","Satu sampai tiga detik pertama video. Hook menghentikan scroll dengan membuka pertanyaan, ketegangan, atau kejutan yang ingin dituntaskan penonton."),
+  sources:[{t:FERRY.t,n:"Hook comes from the conflict, not from shouting."},{t:"Meta Business Help Center, creative best practices",n:"Capture attention in the first seconds of video ads."}],
+  vocab:[{en:"scroll-stopping",id:"bikin berhenti scroll",ex:"Visual pembuka harus bikin berhenti scroll."},{en:"open loop",id:"rasa penasaran yang belum terjawab",ex:"Hook yang baik membuka rasa penasaran di detik pertama."}],
+  quiz:[Q(B("What makes a hook work, according to your notes?","Menurut catatanmu, apa yang membuat hook berhasil?"),
+   [["Loud music in the first second","Musik keras di detik pertama"],["Opening a question or tension the viewer wants resolved","Membuka pertanyaan atau ketegangan yang ingin dituntaskan penonton"],["Showing the logo early","Menampilkan logo sejak awal"],["Listing product specs","Menyebutkan spesifikasi produk"]],1,
+   B("A hook earns the next seconds by opening a loop. Volume or branding alone gives no reason to stay.","Hook mendapatkan detik berikutnya dengan membuka rasa penasaran. Suara keras atau logo saja tidak memberi alasan untuk bertahan."))]},
+ {id:"three_act",label:B("Three-part structure","Struktur tiga babak"),topics:["story"],mastery:55,
+  summary:B("Setup, conflict, resolution. Even a 30-second video is easy to follow when it introduces a situation, raises a problem and resolves it.","Pengenalan, konflik, penyelesaian. Video 30 detik pun mudah diikuti jika mengenalkan situasi, memunculkan masalah, lalu menyelesaikannya."),
+  sources:[FERRY,{t:"Syd Field, Screenplay (1979)",n:"The classic three-act model for film."}],
+  vocab:[{en:"setup",id:"babak pengenalan",ex:"Di babak pengenalan, tunjukkan lokasi proyeknya."},{en:"resolution",id:"babak penyelesaian (resolusi)",ex:"Produk muncul di babak penyelesaian."}],
+  quiz:[Q(B("In a 30-second product video, where does the product usually enter?","Di video produk 30 detik, kapan produk biasanya muncul?"),
+   [["In the setup, before any problem","Di babak pengenalan, sebelum ada masalah"],["At the resolution, as the answer to the conflict","Di babak penyelesaian, sebagai jawaban atas konflik"],["Only in the caption","Hanya di caption"],["It shouldn’t appear","Tidak perlu muncul"]],1,
+   B("The product persuades best as the answer to a problem the viewer already cares about.","Produk paling meyakinkan saat hadir sebagai jawaban atas masalah yang sudah dipedulikan penonton."))]},
+ {id:"conflict",label:B("Conflict","Konflik"),topics:["story"],mastery:40,
+  summary:B("The problem or stakes that make the viewer care. Without conflict a video is information; with it, it becomes a story.","Masalah atau taruhan yang membuat penonton peduli. Tanpa konflik, video hanya informasi; dengan konflik, video menjadi cerita."),
+  sources:[FERRY],
+  vocab:[{en:"stakes",id:"taruhan (apa yang dipertaruhkan)",ex:"Taruhannya: proyek telat dan kena denda."},{en:"pain point",id:"titik masalah",ex:"Titik masalah pemilik bengkel: kompresor mati saat order menumpuk."}],
+  quiz:[Q(B("Which line creates the strongest conflict for a workshop owner?","Kalimat mana yang menciptakan konflik paling kuat bagi pemilik bengkel?"),
+   [["Our compressor is 2 HP","Kompresor kami 2 HP"],["The order is due at eight, and the compressor just died","Order harus selesai jam delapan, dan kompresornya baru saja mati"],["We have many colors","Tersedia banyak warna"],["Free shipping this week","Gratis ongkir minggu ini"]],1,
+   B("Conflict needs stakes and a moment. A deadline plus a breakdown gives both.","Konflik butuh taruhan dan momen. Tenggat waktu ditambah mesin mati memberi keduanya.")),
+   Q(B("Why do stakes framed as something the viewer could lose often hit harder?","Mengapa taruhan yang dibingkai sebagai sesuatu yang bisa hilang sering lebih kena?"),
+   [["Losses feel larger than equal gains","Kerugian terasa lebih besar daripada keuntungan yang setara"],["People prefer bad news","Orang lebih suka kabar buruk"],["Negative words are cheaper to film","Kata negatif lebih murah diproduksi"],["Platforms favor negative content","Platform mengutamakan konten negatif"]],0,
+   B("Loss aversion: a possible loss weighs more than a gain of the same size.","Loss aversion: potensi kerugian terasa lebih berat daripada keuntungan yang sama besarnya."),"lossaversion")]},
+ {id:"rhetoric",label:B("Ethos, pathos, logos","Ethos, pathos, logos"),topics:["story"],mastery:60,
+  summary:B("Aristotle’s three ways to persuade: the speaker’s credibility, the audience’s emotion and the argument’s logic.","Tiga cara membujuk menurut Aristoteles: kredibilitas pembicara, emosi audiens, dan logika argumen."),
+  sources:[{t:"Aristotle, Rhetoric",n:"The original three modes of persuasion."},FERRY],
+  vocab:[{en:"credibility",id:"kredibilitas",ex:"Mekanik senior menambah kredibilitas video."},{en:"persuasion",id:"persuasi (bujukan)",ex:"Script yang baik memakai tiga jalur persuasi."}],
+  quiz:[Q(B("A mechanic with 15 years’ experience recommending a tool mainly uses…","Mekanik berpengalaman 15 tahun yang merekomendasikan alat terutama memakai…"),
+   [["Ethos","Ethos"],["Pathos","Pathos"],["Logos","Logos"],["None of them","Tidak satu pun"]],0,
+   B("Ethos persuades through the speaker’s credibility.","Ethos membujuk lewat kredibilitas pembicara."))]},
+ {id:"cta",label:B("Call to action","Ajakan bertindak (CTA)"),topics:["story","ads"],mastery:80,
+  summary:B("The one next step you ask the viewer to take. One clear action converts better than a menu of options.","Satu langkah lanjutan yang kamu minta dari penonton. Satu ajakan yang jelas lebih efektif daripada banyak pilihan."),
+  sources:[FERRY],
+  vocab:[{en:"conversion",id:"konversi",ex:"CTA yang jelas menaikkan konversi."},{en:"friction",id:"hambatan (friksi)",ex:"Terlalu banyak pilihan menambah friksi."}],
+  quiz:[Q(B("Which call to action is clearest?","Ajakan bertindak mana yang paling jelas?"),
+   [["Follow, like, share, comment and visit our store","Follow, like, share, komen, dan kunjungi toko kami"],["Tap the WhatsApp button to get a price","Klik tombol WhatsApp untuk dapat harga"],["Learn more about us sometime","Kenali kami lebih jauh kapan-kapan"],["Check everything out","Lihat semuanya"]],1,
+   B("One concrete action with a clear reward removes a decision the viewer would otherwise have to make.","Satu tindakan konkret dengan manfaat jelas menghapus keputusan yang harus diambil penonton."))]},
+ {id:"frequency",label:B("Ad frequency","Frekuensi iklan"),topics:["ads"],mastery:30,
+  summary:B("The average number of times one person sees your ad in a period. Some repetition helps recall; too much wears people out.","Rata-rata berapa kali satu orang melihat iklanmu dalam satu periode. Pengulangan secukupnya membantu ingatan; terlalu sering membuat jenuh."),
+  sources:[{t:"Meta Business Help Center, frequency",n:"Impressions divided by reach."}],
+  vocab:[{en:"impressions",id:"impresi (jumlah tayang)",ex:"Impresi dibagi jangkauan menghasilkan frekuensi."},{en:"reach",id:"jangkauan",ex:"Jangkauan adalah jumlah orang unik yang melihat iklan."}],
+  quiz:[Q(B("Frequency is calculated as…","Frekuensi dihitung dengan…"),
+   [["Clicks ÷ impressions","Klik ÷ impresi"],["Impressions ÷ reach","Impresi ÷ jangkauan"],["Reach ÷ budget","Jangkauan ÷ anggaran"],["Views ÷ followers","Tayangan ÷ pengikut"]],1,
+   B("Impressions divided by reach gives the average exposures per person.","Impresi dibagi jangkauan menghasilkan rata-rata paparan per orang.")),
+   Q(B("Spaced repetition and ad frequency both deal with repeated exposure. What’s the key difference?","Pengulangan berjarak dan frekuensi iklan sama-sama soal paparan berulang. Apa perbedaan utamanya?"),
+   [["They’re the same idea","Keduanya ide yang sama"],["Spacing strengthens memory; dense ad repetition risks fatigue","Pengulangan berjarak memperkuat ingatan; iklan yang terlalu rapat berisiko bikin jenuh"],["Ad frequency always wins","Frekuensi iklan selalu lebih baik"],["Spacing only works for children","Pengulangan berjarak hanya untuk anak-anak"]],1,
+   B("Both time repetition. Learning spaces it out on purpose; ads shown too often, too fast, wear people out.","Keduanya mengatur waktu pengulangan. Belajar sengaja memberi jarak; iklan yang terlalu sering dalam waktu singkat membuat orang jenuh."),"spaced")]},
+ {id:"fatigue",label:B("Creative fatigue","Kejenuhan materi iklan"),topics:["ads"],mastery:20,
+  summary:B("Results drop when the same audience sees the same creative too often. Watch for rising frequency together with a falling click-through rate.","Hasil iklan turun saat audiens yang sama terlalu sering melihat materi yang sama. Waspadai frekuensi naik bersamaan dengan CTR turun."),
+  sources:[{t:"Meta Business Help Center, ad fatigue",n:"Refresh creative when results decline at high frequency."}],
+  vocab:[{en:"creative",id:"materi iklan (kreatif)",ex:"Ganti kreatif saat CTR mulai turun."},{en:"ad fatigue",id:"kejenuhan iklan",ex:"Audiens kecil lebih cepat mengalami kejenuhan iklan."}],
+  quiz:[Q(B("Which pair of signals most suggests creative fatigue?","Pasangan sinyal mana yang paling menandakan kejenuhan materi iklan?"),
+   [["Frequency up, CTR down","Frekuensi naik, CTR turun"],["Frequency down, CTR up","Frekuensi turun, CTR naik"],["Reach up, CPM down","Jangkauan naik, CPM turun"],["Budget up, reach up","Anggaran naik, jangkauan naik"]],0,
+   B("Fatigue means more exposures per person while fewer people click.","Kejenuhan berarti paparan per orang bertambah sementara yang mengeklik makin sedikit."))]},
+ {id:"hookrate",label:B("Hook rate","Hook rate (rasio tahan 3 detik)"),topics:["ads"],mastery:45,
+  summary:B("The share of impressions that keep watching past about three seconds. It isn’t a built-in Meta field; it’s 3-second video plays divided by impressions.","Persentase impresi yang menonton lebih dari sekitar tiga detik. Ini bukan kolom bawaan Meta; dihitung dari putar video 3 detik dibagi impresi."),
+  sources:[{t:"Your ad reporting sheet",n:"Calculated column next to CTR."}],
+  vocab:[{en:"3-second video plays",id:"putar video 3 detik",ex:"Ambil kolom putar video 3 detik dari Ads Manager."},{en:"benchmark",id:"tolok ukur",ex:"Bandingkan hook rate dengan tolok ukur akunmu sendiri."}],
+  quiz:[Q(B("Hook rate mainly tells you about…","Hook rate terutama memberi tahu tentang…"),
+   [["The opening of the video","Pembuka video"],["The landing page","Halaman tujuan"],["The audience size","Ukuran audiens"],["The price","Harga"]],0,
+   B("It measures whether people stay past the first seconds, which is the hook’s job.","Metrik ini mengukur apakah orang bertahan melewati detik awal, yang memang tugas hook."))]},
+ {id:"ctr",label:B("Click-through rate","Rasio klik (CTR)"),topics:["ads"],mastery:75,
+  summary:B("Clicks divided by impressions: how many of the people who saw the ad acted on it.","Klik dibagi impresi: berapa banyak orang yang melihat iklan lalu bertindak."),
+  sources:[{t:"Meta Business Help Center, CTR",n:"Link click-through rate definition."}],
+  vocab:[{en:"link click",id:"klik tautan",ex:"Pakai CTR klik tautan, bukan semua klik."},{en:"cost per click",id:"biaya per klik (CPC)",ex:"CTR yang naik biasanya menurunkan biaya per klik."}],
+  quiz:[Q(B("An ad with 20,000 impressions and 300 clicks has a CTR of…","Iklan dengan 20.000 impresi dan 300 klik punya CTR sebesar…"),
+   [["0.15%","0,15%"],["1.5%","1,5%"],["15%","15%"],["3%","3%"]],1,
+   B("300 ÷ 20,000 = 0.015, which is 1.5%.","300 ÷ 20.000 = 0,015, yaitu 1,5%."))]},
+ {id:"attention",label:B("Attention","Perhatian (atensi)"),topics:["psych","learn"],mastery:50,
+  summary:B("Attention is limited, so people filter out most of what they see. Novelty, personal relevance and contrast get through.","Perhatian itu terbatas, jadi orang menyaring sebagian besar yang mereka lihat. Hal baru, relevansi pribadi, dan kontras yang lolos saringan."),
+  sources:[{t:"Kahneman, Attention and Effort (1973)",n:"Attention as a limited capacity."}],
+  vocab:[{en:"selective attention",id:"perhatian selektif",ex:"Perhatian selektif membuat iklan generik terlewat."},{en:"relevance",id:"relevansi",ex:"Masalah di lokasi proyek terasa relevan bagi pekerja lapangan."}],
+  quiz:[Q(B("Which is most likely to break through a busy feed for a construction worker?","Mana yang paling mungkin menembus feed yang ramai bagi pekerja konstruksi?"),
+   [["A generic stock photo","Foto stok generik"],["A familiar site problem shown in the first second","Masalah lapangan yang familier di detik pertama"],["A long logo animation","Animasi logo yang panjang"],["Small text on a white background","Teks kecil di latar putih"]],1,
+   B("Personal relevance is one of the strongest attention filters.","Relevansi pribadi adalah salah satu penyaring perhatian terkuat."))]},
+ {id:"socialproof",label:B("Social proof","Bukti sosial"),topics:["psych","story"],mastery:70,
+  summary:B("When unsure, people look at what others like them do. Reviews, user counts and real customers on camera all work this way.","Saat ragu, orang melihat apa yang dilakukan orang lain yang mirip dengan mereka. Ulasan, jumlah pengguna, dan pelanggan asli di video bekerja dengan cara ini."),
+  sources:[{t:"Cialdini, Influence (1984)",n:"Chapter on social proof."}],
+  vocab:[{en:"testimonial",id:"testimoni",ex:"Testimoni pemilik bengkel lebih dipercaya daripada klaim brand."},{en:"user-generated content",id:"konten buatan pengguna (UGC)",ex:"UGC adalah salah satu bentuk bukti sosial."}],
+  quiz:[Q(B("Which line is social proof?","Kalimat mana yang termasuk bukti sosial?"),
+   [["“Used by 300 workshops across Java”","“Dipakai 300 bengkel di seluruh Jawa”"],["“Made with steel”","“Terbuat dari baja”"],["“Now 20% off”","“Sekarang diskon 20%”"],["“Available in blue”","“Tersedia warna biru”"]],0,
+   B("It shows that people similar to the viewer already chose it.","Kalimat itu menunjukkan orang yang mirip penonton sudah memilihnya."))]},
+ {id:"lossaversion",label:B("Loss aversion","Penghindaran kerugian"),topics:["psych","story"],mastery:35,
+  summary:B("Losses feel bigger than gains of the same size, so “stop losing a day to breakdowns” usually beats “gain a day.”","Kerugian terasa lebih besar daripada keuntungan yang sama, jadi “berhenti kehilangan sehari karena mesin rusak” biasanya lebih kena daripada “dapat tambahan sehari.”"),
+  sources:[{t:"Kahneman and Tversky, Prospect Theory (1979)",n:"The value function is steeper for losses."}],
+  vocab:[{en:"framing",id:"pembingkaian pesan",ex:"Pembingkaian kerugian lebih kuat untuk pemilik usaha."},{en:"downtime",id:"waktu henti",ex:"Waktu henti mesin berarti kehilangan pendapatan."}],
+  quiz:[Q(B("Which framing uses loss aversion?","Framing mana yang memakai loss aversion?"),
+   [["Save time with our tool","Hemat waktu dengan alat kami"],["Every breakdown costs you a day’s pay","Setiap mesin rusak membuatmu kehilangan upah sehari"],["Our tool is reliable","Alat kami andal"],["New model available","Model baru tersedia"]],1,
+   B("It frames the message as avoiding a loss the viewer already fears.","Pesannya dibingkai sebagai cara menghindari kerugian yang sudah ditakuti penonton."))]},
+ {id:"forgetting",label:B("Forgetting curve","Kurva lupa"),topics:["learn"],mastery:60,
+  summary:B("Memory fades fast after learning, steepest in the first days, unless the material is reviewed.","Ingatan cepat memudar setelah belajar, paling curam di hari-hari pertama, kecuali materinya diulang."),
+  sources:[{t:"Ebbinghaus, Memory (1885)",n:"Self-experiments with nonsense syllables."}],
+  vocab:[{en:"retention",id:"retensi (daya ingat)",ex:"Retensi turun tajam sehari setelah belajar."},{en:"decay",id:"peluruhan",ex:"Peluruhan ingatan bisa diperlambat dengan review."}],
+  quiz:[Q(B("When is forgetting fastest?","Kapan lupa terjadi paling cepat?"),
+   [["Soon after learning","Tidak lama setelah belajar"],["After a year","Setelah setahun"],["It’s constant","Kecepatannya selalu sama"],["Only during sleep","Hanya saat tidur"]],0,
+   B("The curve is steepest right after learning, so the first review matters most.","Kurvanya paling curam tepat setelah belajar, jadi review pertama paling penting."))]},
+ {id:"spaced",label:B("Spaced repetition","Pengulangan berjarak"),topics:["learn"],mastery:40,
+  summary:B("Reviewing at growing intervals beats cramming the same study time into one session.","Mengulang dengan jeda yang makin panjang lebih efektif daripada belajar kebut semalam dengan waktu yang sama."),
+  sources:[{t:"Cepeda et al. (2006)",n:"Review of distributed practice studies."}],
+  vocab:[{en:"interval",id:"jeda",ex:"Jeda review bertambah setiap kali kamu berhasil mengingat."},{en:"cramming",id:"sistem kebut semalam (SKS)",ex:"Materi yang dipelajari dengan SKS cepat lupa."}],
+  quiz:[Q(B("Which schedule is spaced repetition?","Jadwal mana yang termasuk pengulangan berjarak?"),
+   [["Review five times tonight","Review lima kali malam ini"],["Review after one day, three days, then a week","Review setelah satu hari, tiga hari, lalu seminggu"],["Review only before the exam","Review hanya sebelum ujian"],["Never review","Tidak pernah review"]],1,
+   B("Intervals grow as the memory gets stronger.","Jedanya bertambah seiring ingatan makin kuat."))]},
+ {id:"retrieval",label:B("Retrieval practice","Latihan mengingat kembali"),topics:["learn"],mastery:25,
+  summary:B("Pulling information out of memory strengthens it more than rereading. Every test in this app is retrieval practice.","Mengeluarkan informasi dari ingatan memperkuatnya lebih dari membaca ulang. Setiap tes di aplikasi ini adalah latihan mengingat kembali."),
+  sources:[{t:"Roediger and Karpicke (2006)",n:"The testing effect."}],
+  vocab:[{en:"testing effect",id:"efek pengujian",ex:"Karena efek pengujian, diuji membuat ingatan lebih awet."},{en:"recall",id:"mengingat kembali",ex:"Coba ingat kembali tanpa melihat catatan."}],
+  quiz:[Q(B("Which study habit is retrieval practice?","Kebiasaan belajar mana yang termasuk latihan mengingat kembali?"),
+   [["Highlighting the chapter","Menandai bab dengan stabilo"],["Rereading your notes","Membaca ulang catatan"],["Closing the book and explaining it from memory","Menutup buku lalu menjelaskannya dari ingatan"],["Copying the summary","Menyalin ringkasan"]],2,
+   B("Recalling without looking forces retrieval, and that effort strengthens memory.","Mengingat tanpa melihat memaksa otak menarik informasi, dan usaha itu yang memperkuat ingatan."))]},
+ {id:"dualcoding",label:B("Dual coding","Pengodean ganda"),topics:["learn"],mastery:0,
+  summary:B("Information stored as both words and images has two routes back into memory.","Informasi yang disimpan sebagai kata dan gambar punya dua jalur untuk diingat kembali."),
+  sources:[{t:"Paivio, Imagery and Verbal Processes (1971)",n:"Verbal and nonverbal memory systems."}],
+  vocab:[{en:"visual aid",id:"alat bantu visual",ex:"Diagram adalah alat bantu visual yang kuat."},{en:"mental image",id:"gambaran mental",ex:"Bayangkan gambaran mental mesinnya saat menghafal istilah."}],
+  quiz:[Q(B("Which note is most likely to stick?","Catatan mana yang paling mudah melekat?"),
+   [["A paragraph of text","Satu paragraf teks"],["A labeled diagram with a short explanation","Diagram berlabel dengan penjelasan singkat"],["A list of keywords","Daftar kata kunci"],["A recording you never replay","Rekaman yang tidak pernah diputar ulang"]],1,
+   B("A visual plus words gives two memory traces for one idea.","Visual ditambah kata memberi dua jejak ingatan untuk satu ide.")),
+   Q(B("Why does a hook that pairs on-screen text with a spoken line tend to land better?","Mengapa hook yang memadukan teks di layar dengan ucapan cenderung lebih kena?"),
+   [["It makes the video longer","Videonya jadi lebih panjang"],["Words and visuals give two routes to the same idea","Kata dan visual memberi dua jalur menuju ide yang sama"],["Platforms only show captioned videos","Platform hanya menayangkan video bercaption"],["It hides weak footage","Menutupi footage yang jelek"]],1,
+   B("That’s dual coding applied to a hook.","Itulah pengodean ganda yang diterapkan pada hook."),"hook")]}
+];
+const LINKS0=[
+ ["attention","hook","prerequisite"],["hook","three_act","part_of"],["conflict","three_act","part_of"],["cta","three_act","part_of"],
+ ["hook","hookrate","causes"],["hookrate","ctr","related"],["frequency","fatigue","causes"],["fatigue","ctr","causes"],
+ ["socialproof","rhetoric","example_of"],["lossaversion","rhetoric","example_of"],["lossaversion","cta","related"],
+ ["forgetting","spaced","prerequisite"],["retrieval","spaced","related"],["spaced","frequency","contrasts"],
+ ["dualcoding","hook","related"],["conflict","lossaversion","related"]
+].map(([s,t,type])=>({source:s,target:t,type,status:"approved",why:null}));
+
+const SAMPLE_TITLE="Why ads stop working (sample article)";
+const SAMPLE_TEXT="Most ad accounts don’t fail because of targeting; they fail because the creative wears out. When a small audience sees the same video again and again, frequency climbs and click-through rate falls. This is creative fatigue. A frequency cap limits how many times one person sees an ad in a set period, which slows fatigue but also limits reach. The stronger fix is novelty: new hooks, new scenes and new faces recapture attention, because the brain notices what is new and filters out what it has already seen. Teams that refresh creative on a schedule, rather than waiting for results to crash, keep cost per result stable. Some marketers borrow from learning science here: just as spaced reviews keep a memory alive without overloading it, spaced exposures keep a brand familiar without exhausting the audience.";
+const OFFLINE={
+  nodes:[
+    {id:"freqcap",label:B("Frequency cap","Batas frekuensi"),topics:["ads"],mastery:0,auto:true,origin:SAMPLE_TITLE,
+     summary:B("A setting that limits how many times one person sees your ad in a period, so repetition stays below the point of fatigue.","Pengaturan yang membatasi berapa kali satu orang melihat iklanmu dalam satu periode, agar pengulangan tidak sampai membuat jenuh."),
+     sources:[{t:SAMPLE_TITLE,n:"A cap slows fatigue but also limits reach."}],
+     vocab:[{en:"cap",id:"batas",ex:"Pasang batas tiga kali tayang per minggu."}],quiz:[]},
+    {id:"novelty",label:B("Novelty","Kebaruan"),topics:["psych","learn"],mastery:0,auto:true,origin:SAMPLE_TITLE,
+     summary:B("New or unexpected stimuli get noticed first, which is why fresh creative recaptures attention that tired creative lost.","Rangsangan yang baru atau tak terduga lebih dulu diperhatikan, karena itu materi iklan baru bisa merebut kembali perhatian yang hilang."),
+     sources:[{t:SAMPLE_TITLE,n:"New hooks, scenes and faces recapture attention."}],
+     vocab:[{en:"refresh",id:"penyegaran materi",ex:"Lakukan penyegaran materi setiap dua minggu."}],quiz:[]}
+  ],
+  merge:{id:"fatigue",source:{t:SAMPLE_TITLE,n:"Fatigue appears sooner with small audiences."}},
+  links:[
+    {source:"freqcap",target:"frequency",type:"related",status:"suggested",why:{en:"A frequency cap is the setting that controls ad frequency."}},
+    {source:"novelty",target:"attention",type:"causes",status:"suggested",why:{en:"The source says novelty recaptures attention."}},
+    {source:"novelty",target:"fatigue",type:"contrasts",status:"suggested",why:{en:"Novelty restores the attention that fatigue wears down."}},
+    {source:"fatigue",target:"forgetting",type:"related",status:"suggested",why:{en:"Both describe a response weakening over time: forgetting from too little exposure, fatigue from too much."}}
+  ]
+};
+
+/* ================= helpers ================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const clone=o=>JSON.parse(JSON.stringify(o));
+const TYPES={
+  prerequisite:{say:"is needed for",dir:true,name:"Needed for"},
+  part_of:{say:"is part of",dir:true,name:"Part of"},
+  causes:{say:"leads to",dir:true,name:"Leads to"},
+  contrasts:{say:"contrasts with",dir:false,name:"Contrasts"},
+  example_of:{say:"is an example of",dir:true,name:"Example of"},
+  related:{say:"relates to",dir:false,name:"Related"}
+};
+const CONF=[{k:"guess",en:"Guessing",id:"Menebak"},{k:"fair",en:"Fairly sure",id:"Cukup yakin"},{k:"sure",en:"Certain",id:"Yakin sekali"}];
+const LEVEL_NAME={unseen:"Not studied",shaky:"Shaky",solid:"Solid"};
+const NF=["id","label","summary","topics","mastery","sources","vocab","quiz","userDef","auto","origin","hist","miscon"];
+const LS="neuron-v2";
+
+function defaultState(){
+  return {v:2,updated:0,prefs:{lang:"en",view:"domains",depth:"complex"},topics:clone(TOPICS0),
+    nodes:clone(NODES0).map(n=>({...n,hist:[],miscon:false})),links:clone(LINKS0),glossary:[],demo:false,lastImport:null};
+}
+function normalize(s){
+  const d=defaultState();
+  s=s&&s.v===2?s:d;
+  s.prefs={...d.prefs,...(s.prefs||{})};
+  s.topics=s.topics||d.topics; s.glossary=s.glossary||[];
+  s.nodes.forEach(n=>{n.hist=n.hist||[];n.quiz=n.quiz||[];n.vocab=n.vocab||[];n.sources=n.sources||[];n.topics=(n.topics||[]).filter(k=>s.topics.some(t=>t.key===k));if(!n.topics.length)n.topics=[s.topics[0].key]});
+  const ids=new Set(s.nodes.map(n=>n.id));
+  s.links=(s.links||[]).filter(l=>ids.has(l.source)&&ids.has(l.target));
+  return s;
+}
+let S;
+try{S=normalize(JSON.parse(localStorage.getItem(LS)||"null"))}catch(e){S=defaultState()}
+function snapshot(){
+  return {v:2,updated:S.updated,prefs:S.prefs,topics:S.topics,glossary:S.glossary,demo:S.demo,lastImport:S.lastImport||null,
+    nodes:S.nodes.map(n=>{const o={};NF.forEach(k=>{if(n[k]!==undefined)o[k]=n[k]});return o}),
+    links:S.links.map(l=>({source:sid(l),target:tid(l),type:l.type,status:l.status,why:l.why||null}))};
+}
+function save(){
+  S.updated=Date.now();
+  const json=JSON.stringify(snapshot());
+  try{localStorage.setItem(LS,json)}catch(e){}
+  scheduleCloud(json);
+}
+const byId=id=>S.nodes.find(n=>n.id===id);
+const topic=k=>S.topics.find(t=>t.key===k);
+const sid=l=>typeof l.source==="object"?l.source.id:l.source;
+const tid=l=>typeof l.target==="object"?l.target.id:l.target;
+const level=m=>m===0?"unseen":m<60?"shaky":"solid";
+const mColor=m=>`var(--${level(m)})`;
+const tColor=k=>{const t=topic(k);return t?`var(--c${t.c%8})`:"var(--edge)"};
+const radius=n=>8+Math.min(n.sources.length,5)*3.2;
+const neighbors=id=>{const s=new Set([id]);S.links.forEach(l=>{if(sid(l)===id)s.add(tid(l));if(tid(l)===id)s.add(sid(l))});return s};
+let hidden=new Set();
+const visible=n=>n.topics.some(k=>!hidden.has(k));
+function T(o){if(!o)return "";if(typeof o==="string")return o;return S.prefs.lang==="id"?(o.id||o.en||""):(o.en||o.id||"")}
+function L(o){
+  if(!o)return "";if(typeof o==="string")return esc(o);
+  const en=o.en||o.id||"",id=o.id||o.en||"",lang=S.prefs.lang;
+  if(lang==="en")return esc(en);if(lang==="id")return esc(id);
+  return en===id?esc(en):`${esc(en)}<span class="alt">${esc(id)}</span>`;
+}
+function slug(s){return String(s).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,40)||"c"}
+function uniqueId(base){let id=base,i=2;while(byId(id))id=base+"_"+(i++);return id}
+const toastEl=$("#toast");let toastT;
+function toast(msg,ms=1800){toastEl.textContent=msg;toastEl.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>toastEl.classList.remove("show"),ms)}
+function withTimeout(p,ms){return Promise.race([p,new Promise((_,r)=>setTimeout(()=>r({code:"timeout"}),ms))])}
+
+/* ================= cloud sync (private per-user doc) ================= */
+let REF=null,SYNC="device",cloudTimer=null,writing=false,pendingJson=null;
+function scheduleCloud(json){
+  if(!REF)return;
+  pendingJson=json||JSON.stringify(snapshot());
+  clearTimeout(cloudTimer);cloudTimer=setTimeout(flushCloud,1200);
+}
+async function flushCloud(){
+  if(!REF||writing||!pendingJson)return;
+  const json=pendingJson;pendingJson=null;
+  if(json.length>240000){SYNC="toolarge";return}
+  writing=true;
+  try{await REF.set({json,updated:S.updated});SYNC="account"}catch(e){SYNC="error"}
+  writing=false;
+  if(pendingJson)flushCloud();
+}
+async function initCloud(){
+  if(!window.claude||!window.claude.use)return;
+  try{
+    const [user,db]=await Promise.all([claude.use("user"),claude.use("db")]);
+    if(!user||!db)return;
+    const uid=await user.id();if(!uid)return;
+    REF=db.doc("data/users/"+uid+"/graph");
+    const snap=await withTimeout(REF.get(),10000);
+    if(snap.exists){
+      const remote=JSON.parse(snap.data().json||"null");
+      if(remote&&(remote.updated||0)>(S.updated||0)){adopt(remote)}
+      else if((S.updated||0)>(remote?.updated||0))scheduleCloud();
+    }else if(S.updated)scheduleCloud();
+    SYNC="account";
+    if(!selected)renderPanel();
+  }catch(e){SYNC="error";REF=null}
+}
+function adopt(remote){
+  S=normalize(remote);
+  try{localStorage.setItem(LS,JSON.stringify(snapshot()))}catch(e){}
+  selected=null;buildChips();syncControls();render();renderPanel();sim.alpha(.8).restart();
+}
+
+/* ================= AI (Claude via the page runtime) ================= */
+let AI=null,TIERS=null;
+if(window.claude&&window.claude.use){
+  claude.use("sample").then(s=>{
+    AI=s||null;
+    if(s&&s.limits)s.limits().then(l=>{TIERS=l&&l.modelTiers||null}).catch(()=>{});
+    renderPanel();
+  }).catch(()=>{});
+}
+function tier(){const t=S.prefs.depth||"default";return TIERS&&!TIERS.includes(t)?"default":t}
+function errMsg(e){
+  const c=e&&e.code;
+  return {not_granted:"Claude access was declined for this page. Reload the page to be asked again.",
+    rate_limited:"You’ve reached your Claude usage limit for now. Try again later or switch AI depth to Quick.",
+    invalid_json:"Claude’s reply couldn’t be read. Try again.",cancelled:"Stopped.",
+    prompt_too_large:"That’s too much text for one request. Paste a shorter part.",
+    refused:"Claude declined this request.",timeout:"The request took too long. Try again."}[c]||`Something went wrong${c?` (${c})`:""}. Try again.`;
+}
+const RULES="You are a careful tutor inside a learner’s personal knowledge app. Ground everything in the concept information and glossary below. The learner’s own definitions and the verified glossary are authoritative: if your own knowledge conflicts with them, follow them and mention the difference. If a term isn’t covered and you aren’t confident about it, say so instead of guessing. Never invent sources.";
+function glossaryText(){
+  const g=S.glossary.map(x=>`- ${x.term}: ${x.def}`);
+  S.nodes.filter(n=>n.userDef).forEach(n=>g.push(`- ${n.label.en} (learner’s definition): ${n.userDef}`));
+  return g.length?g.join("\n"):"(none yet)";
+}
+function conceptContext(n){
+  const conns=S.links.filter(l=>l.status==="approved"&&(sid(l)===n.id||tid(l)===n.id)).map(l=>`- ${byId(sid(l)).label.en} ${TYPES[l.type].say} ${byId(tid(l)).label.en}`);
+  return `CONCEPT: ${n.label.en} (Indonesian: ${n.label.id||"none yet"})
+DOMAINS: ${n.topics.map(k=>topic(k)?.en).join(", ")}
+SUMMARY: ${n.summary.en}
+LEARNER’S OWN DEFINITION (authoritative): ${n.userDef||"none"}
+SOURCES THE LEARNER READ:
+${n.sources.map(s=>`- ${s.t}: ${s.n}`).join("\n")||"- none"}
+CONNECTED CONCEPTS:
+${conns.join("\n")||"- none"}
+VERIFIED GLOSSARY (authoritative):
+${glossaryText()}`;
+}
+function langLine(){return {en:"Write in English.",id:"Write in Indonesian (Bahasa Indonesia), natural and professional.",both:"Write in English first, then give the same content in Indonesian."}[S.prefs.lang]}
+function busy(el,label){
+  const ctl=new AbortController();
+  el.innerHTML=`<div class="status"><span>${esc(label||"Thinking…")}</span><button class="btn small">Stop</button></div>`;
+  el.querySelector("button").onclick=()=>ctl.abort();
+  return ctl;
+}
+
+/* ================= graph ================= */
+const svg=d3.select("#canvas");
+const defs=svg.append("defs");
+[["arr","arrowhead"],["arr-hot","arrowhead hot"],["arr-acc","arrowhead acc"]].forEach(([id,cls])=>{
+  defs.append("marker").attr("id",id).attr("viewBox","0 0 10 10").attr("refX",9).attr("refY",5).attr("markerWidth",7).attr("markerHeight",7).attr("orient","auto")
+    .append("path").attr("d","M0 0L10 5L0 10Z").attr("class",cls);
+});
+const root=svg.append("g");
+const hullG=root.append("g").attr("class","hulls"),linkG=root.append("g"),nodeG=root.append("g");
+const zoom=d3.zoom().scaleExtent([0.3,3]).on("zoom",e=>root.attr("transform",e.transform));
+svg.call(zoom).on("dblclick.zoom",null);
+svg.on("click",e=>{if(e.target===svg.node()||e.target.closest(".hull"))select(null)});
+let W=800,H=600;
+function size(){const r=$("#graph").getBoundingClientRect();W=r.width||800;H=r.height||600}
+size();
+function anchors(){
+  const ks=S.topics.map(t=>t.key),m={},dom=S.prefs.view==="domains";
+  const R=Math.min(W,H)*(dom?.3:.24);
+  ks.forEach((k,i)=>{const a=-Math.PI*3/4+i*2*Math.PI/ks.length;m[k]={x:W/2+Math.cos(a)*R*1.3,y:H/2+Math.sin(a)*R}});
+  return m;
+}
+let AN=anchors();
+const ax=d=>d3.mean(d.topics,k=>(AN[k]||{x:W/2}).x),ay=d=>d3.mean(d.topics,k=>(AN[k]||{y:H/2}).y);
+const sim=d3.forceSimulation()
+  .force("link",d3.forceLink().id(d=>d.id).distance(l=>l.status==="suggested"?120:85).strength(l=>S.prefs.view==="domains"?.25:.5))
+  .force("charge",d3.forceManyBody().strength(-300))
+  .force("collide",d3.forceCollide().radius(d=>radius(d)+22))
+  .force("x",d3.forceX(ax))
+  .force("y",d3.forceY(ay))
+  .on("tick",tick);
+function setForces(){
+  AN=anchors();
+  const st=S.prefs.view==="domains"?.16:.06;
+  sim.force("x").x(ax).strength(st);sim.force("y").y(ay).strength(st);
+}
+const hullLine=d3.line().curve(d3.curveCatmullRomClosed.alpha(.7));
+let linkSel,nodeSel,hullSel,selected=null;
+function render(){
+  setForces();
+  hullSel=hullG.selectAll("g.hull").data(S.topics,t=>t.key).join(enter=>{const g=enter.append("g").attr("class","hull");g.append("path");g.append("text");return g});
+  hullSel.select("path").attr("fill",t=>`var(--c${t.c%8})`).attr("stroke",t=>`var(--c${t.c%8})`);
+  hullSel.select("text").attr("fill",t=>`var(--c${t.c%8})`);
+  hullG.classed("off",S.prefs.view!=="domains");
+  root.classed("domains",S.prefs.view==="domains");
+  linkSel=linkG.selectAll("path").data(S.links,l=>sid(l)+">"+tid(l)).join("path")
+    .attr("class",l=>`edge t-${l.type}${l.status==="suggested"?" suggested":""}`);
+  nodeSel=nodeG.selectAll("g.node").data(S.nodes,d=>d.id).join(enter=>{
+    const g=enter.append("g").attr("class","node").attr("tabindex",0).attr("role","button")
+      .on("click",(e,d)=>{e.stopPropagation();select(d.id)})
+      .on("keydown",(e,d)=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();select(d.id)}})
+      .call(d3.drag().on("start",(e,d)=>{if(!e.active)sim.alphaTarget(.25).restart();d.fx=d.x;d.fy=d.y})
+        .on("drag",(e,d)=>{d.fx=e.x;d.fy=e.y})
+        .on("end",(e,d)=>{if(!e.active)sim.alphaTarget(0);d.fx=null;d.fy=null}));
+    g.append("g").attr("class","rings");g.append("circle").attr("class","core");g.append("circle").attr("class","flag");g.append("text");
+    return g;
+  });
+  nodeSel.attr("aria-label",d=>`${T(d.label)}, ${d.topics.map(k=>T(topic(k))).join(" and ")}, ${LEVEL_NAME[level(d.mastery)]}${d.miscon?", misconception flagged":""}`);
+  nodeSel.select(".rings").selectAll("path").data(d=>d.topics.map((k,i,a)=>({k,i,n:a.length,r:radius(d)}))).join("path")
+    .attr("d",o=>d3.arc()({innerRadius:o.r+1.5,outerRadius:o.r+5,startAngle:o.i/o.n*2*Math.PI,endAngle:(o.i+1)/o.n*2*Math.PI,padAngle:o.n>1?.12:0}))
+    .attr("fill",o=>tColor(o.k));
+  nodeSel.select(".core").attr("r",d=>radius(d)).attr("fill",d=>mColor(d.mastery));
+  nodeSel.select(".flag").attr("cx",d=>radius(d)*.75).attr("cy",d=>-radius(d)*.75).attr("r",4.5).classed("hidden",d=>!d.miscon);
+  nodeSel.select("text").each(function(d){
+    const t=d3.select(this);t.selectAll("tspan").remove();const r=radius(d)+19;
+    if(S.prefs.lang==="both"){
+      t.append("tspan").attr("x",0).attr("y",r).text(d.label.en);
+      if(d.label.id&&d.label.id!==d.label.en)t.append("tspan").attr("x",0).attr("dy","1.2em").attr("class","sub").text(d.label.id);
+    }else t.append("tspan").attr("x",0).attr("y",r).text(T(d.label));
+  });
+  sim.nodes(S.nodes);
+  sim.force("link").links(S.links);
+  sim.force("collide").radius(d=>radius(d)+(S.prefs.lang==="both"?26:22));
+  applyVisibility();highlight();
+}
+function edgePath(l){
+  const s=l.source,t=l.target;if(s.x==null||t.x==null)return "";
+  const dx=t.x-s.x,dy=t.y-s.y;
+  const cx=(s.x+t.x)/2-dy*.12,cy=(s.y+t.y)/2+dx*.12;
+  const v1x=cx-s.x,v1y=cy-s.y,d1=Math.hypot(v1x,v1y)||1,v2x=t.x-cx,v2y=t.y-cy,d2=Math.hypot(v2x,v2y)||1;
+  const r1=radius(s)+6,r2=radius(t)+(TYPES[l.type].dir?7:6);
+  return `M${s.x+v1x/d1*r1},${s.y+v1y/d1*r1} Q${cx},${cy} ${t.x-v2x/d2*r2},${t.y-v2y/d2*r2}`;
+}
+function drawHulls(){
+  if(S.prefs.view!=="domains"||!hullSel)return;
+  hullSel.each(function(tp){
+    const pts=[];
+    S.nodes.forEach(n=>{if(n.x==null||!visible(n)||hidden.has(tp.key)||!n.topics.includes(tp.key))return;const r=radius(n)+26;for(let i=0;i<10;i++){const a=i/10*2*Math.PI;pts.push([n.x+Math.cos(a)*r,n.y+Math.sin(a)*r])}});
+    const g=d3.select(this);
+    if(pts.length<3){g.select("path").attr("d",null);g.select("text").text("");return}
+    const h=d3.polygonHull(pts);const top=h.reduce((m,p)=>p[1]<m[1]?p:m,h[0]);
+    g.select("path").attr("d",hullLine(h));
+    g.select("text").attr("x",top[0]).attr("y",top[1]-7).text(T(tp));
+  });
+}
+function tick(){linkSel.attr("d",edgePath);nodeSel.attr("transform",d=>`translate(${d.x},${d.y})`);drawHulls()}
+function applyVisibility(){
+  nodeSel.classed("hidden",d=>!visible(d));
+  linkSel.classed("hidden",l=>!visible(byId(sid(l)))||!visible(byId(tid(l))));
+  drawHulls();
+}
+function highlight(){
+  const nb=selected?neighbors(selected):null;
+  nodeSel.classed("sel",d=>d.id===selected).classed("dim",d=>nb&&!nb.has(d.id));
+  linkSel.classed("dim",l=>nb&&sid(l)!==selected&&tid(l)!==selected)
+    .classed("hot",l=>selected&&(sid(l)===selected||tid(l)===selected)&&l.status!=="suggested")
+    .attr("marker-end",l=>{if(!TYPES[l.type].dir)return null;if(l.status==="suggested")return "url(#arr-acc)";return selected&&(sid(l)===selected||tid(l)===selected)?"url(#arr-hot)":"url(#arr)"});
+}
+window.addEventListener("resize",()=>{size();setForces();sim.alpha(.3).restart()});
+
+/* ================= controls ================= */
+function buildChips(){
+  const c=$("#chips");c.innerHTML="";
+  S.topics.forEach(t=>{
+    const b=document.createElement("button");b.className="chip";b.setAttribute("aria-pressed",hidden.has(t.key)?"false":"true");
+    b.innerHTML=`<span class="dot" style="background:var(--c${t.c%8})"></span>${esc(T(t))}`;
+    b.onclick=()=>{hidden.has(t.key)?hidden.delete(t.key):hidden.add(t.key);b.setAttribute("aria-pressed",hidden.has(t.key)?"false":"true");applyVisibility()};
+    c.appendChild(b);
+  });
+}
+function buildLegend(){
+  $("#legend").innerHTML=["unseen","shaky","solid"].map(l=>`<div class="row"><span class="dot" style="background:var(--${l})"></span>${LEVEL_NAME[l]}</div>`).join("")+
+   `<div class="row"><span class="dot" style="background:var(--danger)"></span>Misconception</div>`+
+   `<div class="row lt"><svg viewBox="0 0 28 12" aria-hidden="true"><path d="M8 2a5 5 0 0 1 0 8" fill="none" stroke="var(--c0)" stroke-width="3"/><path d="M8 10a5 5 0 0 1 0-8" fill="none" stroke="var(--c1)" stroke-width="3"/></svg>Split ring = in two domains</div>`+
+   `<div class="row lt"><svg viewBox="0 0 28 12" aria-hidden="true"><line x1="1" y1="6" x2="21" y2="6" stroke="var(--edge)" stroke-width="1.6"/><path d="M20 3L26 6L20 9Z" fill="var(--edge)"/></svg>Directional link</div>`+
+   `<div class="row lt"><svg viewBox="0 0 28 12" aria-hidden="true"><line x1="1" y1="6" x2="27" y2="6" stroke="var(--edge)" stroke-width="1.6" stroke-dasharray="6 4"/></svg>Contrasts</div>`+
+   `<div class="row lt"><svg viewBox="0 0 28 12" aria-hidden="true"><line x1="1" y1="6" x2="27" y2="6" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="4 4"/></svg>Suggested</div>`;
+}
+function syncControls(){
+  document.querySelectorAll("#langSeg button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.lang===S.prefs.lang));
+  document.querySelectorAll("#viewSeg button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.view===S.prefs.view));
+  $("#depth").value=S.prefs.depth;
+}
+document.querySelectorAll("#langSeg button").forEach(b=>b.onclick=()=>{S.prefs.lang=b.dataset.lang;save();syncControls();buildChips();render();renderPanel();sim.alpha(.2).restart()});
+document.querySelectorAll("#viewSeg button").forEach(b=>b.onclick=()=>{S.prefs.view=b.dataset.view;save();syncControls();render();sim.alpha(.8).restart()});
+$("#depth").onchange=e=>{S.prefs.depth=e.target.value;save()};
+const qEl=$("#q");
+qEl.addEventListener("input",()=>{const v=qEl.value.trim().toLowerCase();nodeSel.classed("match",d=>v&&(d.label.en+" "+(d.label.id||"")).toLowerCase().includes(v))});
+qEl.addEventListener("keydown",e=>{
+  if(e.key!=="Enter")return;const v=qEl.value.trim().toLowerCase();
+  const n=S.nodes.find(d=>visible(d)&&(d.label.en+" "+(d.label.id||"")).toLowerCase().includes(v));
+  if(n){select(n.id);qEl.value="";nodeSel.classed("match",false)}else if(v)toast("No concept matches “"+qEl.value.trim()+"”");
+});
+
+/* ================= panel ================= */
+const panel=$("#panel");
+let tab="overview",testMode="mcq",MCQ={sel:null},quizIdx={},ESSAY={},CHATS={},editingDef=false;
+function select(id,t){
+  selected=id;tab=t||"overview";MCQ={sel:null};editingDef=false;
+  highlight();renderPanel();
+  if(id){const n=byId(id);if(n&&n.x!=null)svg.transition().duration(500).call(zoom.translateTo,n.x,n.y)}
+}
+function due(){return S.nodes.filter(n=>n.mastery<60||n.miscon).sort((a,b)=>(b.miscon-a.miscon)||(a.mastery-b.mastery))}
+function nodeBtn(id){const m=byId(id);return `<button class="link" data-go="${esc(id)}">${esc(T(m.label))}</button>`}
+function sentence(l){
+  const s=byId(sid(l)),t=byId(tid(l));
+  const cross=!s.topics.some(k=>t.topics.includes(k))?`<span class="pill">Cross-domain</span>`:"";
+  const a=s.id===selected?`<span>${esc(T(s.label))}</span>`:nodeBtn(s.id);
+  const b=t.id===selected?`<span>${esc(T(t.label))}</span>`:nodeBtn(t.id);
+  return `${a} ${TYPES[l.type].say} ${b}${cross}`;
+}
+function meterHTML(n){return `<span>${LEVEL_NAME[level(n.mastery)]}</span><div class="track"><div class="fill" style="width:${n.mastery}%;background:${mColor(n.mastery)}"></div></div><span>${n.mastery}%</span>`}
+function wireGo(el){el.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>select(b.dataset.go))}
+function renderPanel(){
+  if(!selected){renderHome();return}
+  const n=byId(selected);if(!n){selected=null;renderHome();return}
+  const sugg=S.links.filter(l=>l.status==="suggested"&&(sid(l)===n.id||tid(l)===n.id));
+  panel.innerHTML=`
+    <button class="link back" data-home>All concepts</button>
+    <div>${n.topics.map(k=>`<span class="tag"><span class="dot" style="background:${tColor(k)}"></span>${esc(T(topic(k)))}</span>`).join("")}${n.miscon?`<span class="pill bad">Misconception</span>`:""}${n.auto?`<span class="pill">Added by AI</span>`:""}</div>
+    <h2>${L(n.label)}</h2>
+    <div class="meter" id="meter">${meterHTML(n)}</div>
+    <div class="tabs" role="tablist">
+      ${[["overview","Overview"+(sugg.length?` (${sugg.length} new)`:"")],["words","Words"],["test","Test"],["discuss","Discuss"],["path","Path"]].map(([k,l])=>`<button class="tab" role="tab" aria-selected="${tab===k}" data-tab="${k}">${l}</button>`).join("")}
+    </div>
+    <div id="tabBody"></div>`;
+  panel.querySelector("[data-home]").onclick=()=>select(null);
+  panel.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{tab=b.dataset.tab;MCQ={sel:null};renderPanel()});
+  const body=panel.querySelector("#tabBody");
+  ({overview:renderOverview,words:renderWords,test:renderTest,discuss:renderDiscuss,path:renderPath})[tab](n,body,sugg);
+  wireGo(panel);
+}
+function refreshMeter(n){const m=$("#meter");if(m)m.innerHTML=meterHTML(n)}
+
+/* ----- overview ----- */
+function renderOverview(n,body,sugg){
+  const conns=S.links.filter(l=>l.status==="approved"&&(sid(l)===n.id||tid(l)===n.id));
+  body.innerHTML=`
+    <h3>Summary</h3><p class="summary">${L(n.summary)}</p>
+    <h3>Your definition</h3>
+    <div id="defBox"></div>
+    ${sugg.length?`<h3>Suggested links to review</h3>${sugg.map(l=>`<div class="card dashed"><p>${sentence(l)}</p>${l.why?`<p class="muted small">${esc(T(l.why))}</p>`:""}<div class="btnrow"><button class="btn primary small" data-ok="${esc(sid(l)+">"+tid(l))}">Approve link</button><button class="btn small" data-no="${esc(sid(l)+">"+tid(l))}">Reject</button></div></div>`).join("")}`:""}
+    <h3>Connections (${conns.length})</h3>
+    ${conns.length?`<ul class="plain">${conns.map(l=>`<li class="row-item">${sentence(l)}</li>`).join("")}</ul>`:`<p class="muted">No links yet. Approve a suggestion or add a source that mentions this concept.</p>`}
+    <h3>Sources (${n.sources.length})</h3>
+    <ul class="plain">${n.sources.map(s=>`<li class="row-item src"><b>${esc(s.t)}</b><span>${esc(s.n)}</span></li>`).join("")}</ul>`;
+  renderDef(n,body.querySelector("#defBox"));
+  body.querySelectorAll("[data-ok],[data-no]").forEach(b=>b.onclick=()=>decideLink(b.dataset.ok||b.dataset.no,!!b.dataset.ok));
+}
+function renderDef(n,box){
+  if(editingDef){
+    box.innerHTML=`<textarea class="field" rows="4" id="defTxt" placeholder="Explain it the way you understand it, in English or Indonesian">${esc(n.userDef||"")}</textarea>
+      <div class="btnrow"><button class="btn primary small" id="defSave">Save definition</button><button class="btn small" id="defCancel">Cancel</button>${n.userDef?`<button class="btn small" id="defDel">Remove</button>`:""}</div>`;
+    box.querySelector("#defTxt").focus();
+    box.querySelector("#defSave").onclick=()=>{const v=box.querySelector("#defTxt").value.trim();n.userDef=v||undefined;editingDef=false;save();renderDef(n,box);toast(v?"Definition saved. Claude will treat it as the source of truth.":"Definition removed")};
+    box.querySelector("#defCancel").onclick=()=>{editingDef=false;renderDef(n,box)};
+    const del=box.querySelector("#defDel");if(del)del.onclick=()=>{delete n.userDef;editingDef=false;save();renderDef(n,box)};
+  }else if(n.userDef){
+    box.innerHTML=`<div class="card"><p>${esc(n.userDef)}</p><p class="muted small">Claude uses this as the source of truth in tests, grading and discussion.</p><button class="link small" id="defEdit">Edit definition</button></div>`;
+    box.querySelector("#defEdit").onclick=()=>{editingDef=true;renderDef(n,box)};
+  }else{
+    box.innerHTML=`<p class="muted">Write the concept in your own words. Claude follows your definition over its own knowledge, which keeps answers grounded in what you learned.</p><button class="btn small" id="defEdit">Add your definition</button>`;
+    box.querySelector("#defEdit").onclick=()=>{editingDef=true;renderDef(n,box)};
+  }
+}
+function decideLink(key,ok){
+  const i=S.links.findIndex(l=>sid(l)+">"+tid(l)===key);
+  if(i>-1){if(ok)S.links[i].status="approved";else S.links.splice(i,1)}
+  save();render();sim.alpha(.3).restart();renderPanel();toast(ok?"Link approved":"Link rejected");
+}
+
+/* ----- words ----- */
+function renderWords(n,body){
+  body.innerHTML=`
+    <h3>Terms in English and Indonesian (${n.vocab.length})</h3>
+    ${n.vocab.length?n.vocab.map((v,i)=>`<div class="vocab"><b>${esc(v.en)}</b><b>${esc(v.id)}</b>${v.ex?`<span class="ex">${esc(v.ex)}</span>`:""}<span class="ex"><button class="link small" data-delv="${i}">Remove</button></span></div>`).join(""):`<p class="muted">No terms yet.</p>`}
+    <div id="vocabAI" class="btnrow"></div>
+    <h3>Add a term</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <input class="field" id="vEn" placeholder="English term" aria-label="English term">
+      <input class="field" id="vId" placeholder="Istilah Indonesia" aria-label="Indonesian term">
+    </div>
+    <input class="field" id="vEx" placeholder="Example sentence (optional)" aria-label="Example sentence" style="margin-top:8px">
+    <div class="err hidden" id="vErr"></div>
+    <div class="btnrow"><button class="btn small" id="vAdd">Add term</button></div>`;
+  body.querySelectorAll("[data-delv]").forEach(b=>b.onclick=()=>{n.vocab.splice(+b.dataset.delv,1);save();renderPanel()});
+  body.querySelector("#vAdd").onclick=()=>{
+    const en=body.querySelector("#vEn").value.trim(),id=body.querySelector("#vId").value.trim(),ex=body.querySelector("#vEx").value.trim(),err=body.querySelector("#vErr");
+    if(!en||!id){err.textContent="Enter both the English and the Indonesian term.";err.classList.remove("hidden");return}
+    n.vocab.push({en,id,ex});save();renderPanel();
+  };
+  ["#vEn","#vId"].forEach(s=>body.querySelector(s).oninput=()=>body.querySelector("#vErr").classList.add("hidden"));
+  const box=body.querySelector("#vocabAI");
+  if(!AI){box.innerHTML=`<p class="muted small">AI suggestions appear here when Claude is available in this view.</p>`;return}
+  box.innerHTML=`<button class="btn small" id="vGen">Suggest 3 more terms with AI</button>`;
+  box.querySelector("#vGen").onclick=async()=>{
+    const ctl=busy(box,"Finding terms…");
+    try{
+      const r=await AI.json(`${RULES}\n\n${conceptContext(n)}\n\nEXISTING TERMS: ${n.vocab.map(v=>v.en).join(", ")||"none"}\n\nSuggest 3 more professional terms or phrases a learner should know for this concept, each with the natural Indonesian equivalent that Indonesian professionals actually use (keep the English loanword in brackets if that’s how it’s used), and one short example sentence in Indonesian. Don’t repeat existing terms.\nReply with only JSON: {"vocab":[{"en":"","id":"","ex":""}]}`,{modelTier:tier()==="complex"?"default":tier(),signal:ctl.signal});
+      (r&&Array.isArray(r.vocab)?r.vocab:[]).filter(v=>v&&v.en&&v.id).slice(0,3).forEach(v=>n.vocab.push({en:String(v.en),id:String(v.id),ex:String(v.ex||"")}));
+      save();renderPanel();
+    }catch(e){box.innerHTML=`<p class="err">${esc(errMsg(e))}</p>`}
+  };
+}
+
+/* ----- test ----- */
+function renderTest(n,body){
+  body.innerHTML=`<div class="btnrow" style="margin:12px 0 14px"><div class="seg" role="group" aria-label="Test type"><button data-mode="mcq" aria-pressed="${testMode==="mcq"}">Multiple choice</button><button data-mode="essay" aria-pressed="${testMode==="essay"}">Essay</button></div></div><div id="testBody"></div>`;
+  body.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{testMode=b.dataset.mode;MCQ={sel:null};renderPanel()});
+  const tb=body.querySelector("#testBody");
+  testMode==="mcq"?renderMCQ(n,tb):renderEssay(n,tb);
+}
+const CBM={right:{guess:6,fair:14,sure:20},wrong:{guess:0,fair:-8,sure:-18}};
+const VERDICT={
+  "right-sure":["Solid.","You knew it, and you knew that you knew it."],
+  "right-fair":["Correct.","Your confidence is catching up with your knowledge."],
+  "right-guess":["Lucky guess.","Right answer, low confidence. It stays in your review queue until you answer it with confidence."],
+  "wrong-guess":["Honest gap.","You knew you didn’t know. That’s the easiest kind of gap to fix."],
+  "wrong-fair":["Shaky.","Read the explanation, then try again later."],
+  "wrong-sure":["Misconception flagged.","You were certain and wrong, so this concept moves to the top of your review."]
+};
+function confButtons(){return CONF.map(c=>`<button class="btn small" data-conf="${c.k}">${esc(T(c))}</button>`).join("")}
+function record(n,right,conf,delta,kind){
+  n.hist.push({c:right?1:0,k:conf,t:Date.now(),kind});if(n.hist.length>40)n.hist.shift();
+  n.mastery=Math.max(0,Math.min(100,Math.round(n.mastery+delta)));
+  if(!right&&conf==="sure")n.miscon=true;
+  if(right&&conf==="sure")n.miscon=false;
+  save();render();refreshMeter(n);
+}
+function renderMCQ(n,tb){
+  if(!n.quiz.length){
+    tb.innerHTML=`<p class="muted">No questions for this concept yet.</p><div id="genBox" class="btnrow"></div>`;
+    genButton(n,tb.querySelector("#genBox"));return;
+  }
+  const i=(quizIdx[n.id]||0)%n.quiz.length,q=n.quiz[i];
+  const kind=q.bridge&&byId(q.bridge)?`<div class="kind bridge">Bridge question linking to ${esc(T(byId(q.bridge).label))}</div>`:`<div class="kind">Question ${i+1} of ${n.quiz.length}${q.ai?", written by AI":""}</div>`;
+  tb.innerHTML=`<div class="card">${kind}<p class="prompt">${L(q.q)}</p>
+    ${q.o.map((o,j)=>`<button class="opt" data-opt="${j}">${L(o)}</button>`).join("")}
+    <div class="conf"><p>How sure are you?</p><div class="btnrow">${confButtons()}</div><div class="err hidden" id="cErr"></div></div>
+    <div id="fb"></div></div><div id="genBox" class="btnrow"></div>`;
+  const opts=tb.querySelectorAll("[data-opt]"),err=tb.querySelector("#cErr");
+  opts.forEach(b=>b.onclick=()=>{MCQ.sel=+b.dataset.opt;opts.forEach(o=>o.classList.toggle("picked",o===b));err.classList.add("hidden")});
+  tb.querySelectorAll("[data-conf]").forEach(cb=>cb.onclick=()=>{
+    if(MCQ.sel==null){err.textContent="Pick an answer first.";err.classList.remove("hidden");return}
+    const conf=cb.dataset.conf,right=MCQ.sel===q.a;
+    opts.forEach(o=>{o.disabled=true;o.classList.remove("picked");if(+o.dataset.opt===q.a)o.classList.add("right")});
+    if(!right)opts[MCQ.sel].classList.add("wrong");
+    tb.querySelector(".conf").classList.add("hidden");
+    let delta=CBM[right?"right":"wrong"][conf];
+    if(right&&q.bridge&&conf!=="guess")delta+=5;
+    record(n,right,conf,delta,"mcq");
+    if(right&&q.bridge&&byId(q.bridge)&&conf!=="guess"){const o=byId(q.bridge);o.mastery=Math.min(100,o.mastery+5);save();render()}
+    const [h,t]=VERDICT[(right?"right":"wrong")+"-"+conf];
+    tb.querySelector("#fb").innerHTML=`<div class="verdict"><p><strong>${h}</strong> ${t}</p><p>${L(q.why)}</p><p class="muted small">Mastery ${delta>=0?"+":"−"}${Math.abs(delta)}%, now ${n.mastery}%.</p>
+      <div class="btnrow"><button class="btn small" id="nextQ">${n.quiz.length>1?"Next question":"Try again"}</button></div></div>`;
+    tb.querySelector("#nextQ").onclick=()=>{quizIdx[n.id]=(quizIdx[n.id]||0)+1;MCQ={sel:null};renderPanel()};
+  });
+  genButton(n,tb.querySelector("#genBox"));
+}
+function genButton(n,box){
+  if(!AI){box.innerHTML=`<p class="muted small">AI-written questions appear here when Claude is available in this view.</p>`;return}
+  const nb=[...neighbors(n.id)].filter(x=>x!==n.id);
+  box.innerHTML=`<button class="btn small" id="gen1">New question with AI</button>${nb.length?`<button class="btn small" id="gen2">New bridge question</button>`:""}`;
+  const go=async bridge=>{
+    const b=bridge?byId(nb[Math.floor(Math.random()*nb.length)]):null;
+    const ctl=busy(box,"Writing a question…");
+    try{
+      const r=await AI.json(`${RULES}\n\n${conceptContext(n)}\n${b?`\nBRIDGE CONCEPT: ${b.label.en}: ${b.summary.en}${b.userDef?` (learner’s definition: ${b.userDef})`:""}\n`:""}\nAVOID REPEATING: ${n.quiz.map(x=>x.q.en).join(" | ")}\n\nWrite one multiple-choice question that tests understanding, not memorized wording${b?`, and that requires connecting “${n.label.en}” with “${b.label.en}”`:""}. Prefer a realistic scenario. Exactly 4 options, one correct, plausible distractors. Give English and natural Indonesian versions of everything.\nReply with only JSON: {"q_en":"","q_id":"","options":[{"en":"","id":""},{"en":"","id":""},{"en":"","id":""},{"en":"","id":""}],"answer":0,"why_en":"","why_id":""}`,{modelTier:tier(),signal:ctl.signal});
+      if(!r||!Array.isArray(r.options)||r.options.length!==4||!(r.answer>=0&&r.answer<4))throw {code:"invalid_json"};
+      n.quiz.push({q:B(String(r.q_en),String(r.q_id||r.q_en)),o:r.options.map(o=>B(String(o.en),String(o.id||o.en))),a:+r.answer,why:B(String(r.why_en||""),String(r.why_id||r.why_en||"")),bridge:b?b.id:null,ai:true});
+      quizIdx[n.id]=n.quiz.length-1;MCQ={sel:null};save();renderPanel();
+    }catch(e){box.innerHTML=`<p class="err">${esc(errMsg(e))}</p>`}
+  };
+  box.querySelector("#gen1").onclick=()=>go(false);
+  const g2=box.querySelector("#gen2");if(g2)g2.onclick=()=>go(true);
+}
+function renderEssay(n,tb){
+  if(!AI){tb.innerHTML=`<div class="card"><p><strong>Essay tests need Claude.</strong></p><p class="muted">Open this page inside Claude and allow it to use Claude when asked. Claude writes an open question, then grades your answer against your sources and definitions, with deep reasoning if you choose it in AI depth.</p></div>`;return}
+  const E=ESSAY[n.id]||(ESSAY[n.id]={});
+  if(!E.q){
+    tb.innerHTML=`<p class="muted">Claude writes an open question about this concept. You answer in your own words, in English or Indonesian, and say how sure you are. Claude grades the understanding, not the wording.</p><div id="eBox" class="btnrow"><button class="btn primary small" id="eGen">Write me an essay question</button></div>`;
+    tb.querySelector("#eGen").onclick=async()=>{
+      const box=tb.querySelector("#eBox"),ctl=busy(box,"Writing a question…");
+      try{
+        const r=await AI.json(`${RULES}\n\n${conceptContext(n)}\n\nWrite one open essay question that checks whether the learner truly understands this concept: ask them to explain why or how, or to apply it to a realistic situation, not just to define it. Also write a short grading rubric of 3 to 5 key points a good answer must contain, based only on the information above.\nReply with only JSON: {"q_en":"","q_id":"","rubric":[""]}`,{modelTier:tier()==="quick"?"quick":"default",signal:ctl.signal});
+        if(!r||!r.q_en)throw {code:"invalid_json"};
+        E.q=B(String(r.q_en),String(r.q_id||r.q_en));E.rubric=(r.rubric||[]).map(String);E.answer="";E.res=null;renderPanel();
+      }catch(e){box.innerHTML=`<p class="err">${esc(errMsg(e))}</p>`}
+    };
+    return;
+  }
+  if(E.res){renderEssayResult(n,tb,E);return}
+  tb.innerHTML=`<div class="card"><div class="kind">Essay question</div><p class="prompt">${L(E.q)}</p>
+    <textarea class="field" rows="7" id="eAns" placeholder="Write your answer in English or Indonesian" aria-label="Your answer">${esc(E.answer||"")}</textarea>
+    <div class="conf"><p style="margin-top:12px">How sure are you? Pick one to submit.</p><div class="btnrow">${confButtons()}</div></div>
+    <div class="err hidden" id="eErr"></div><div id="eStat"></div></div>
+    <div class="btnrow"><button class="link small" id="eNew">Ask a different question</button></div>`;
+  const ta=tb.querySelector("#eAns"),err=tb.querySelector("#eErr");
+  ta.oninput=()=>{E.answer=ta.value;err.classList.add("hidden")};
+  tb.querySelector("#eNew").onclick=()=>{ESSAY[n.id]={};renderPanel()};
+  tb.querySelectorAll("[data-conf]").forEach(cb=>cb.onclick=async()=>{
+    const ans=ta.value.trim();
+    if(ans.split(/\s+/).length<8){err.textContent="Write at least a couple of sentences before submitting.";err.classList.remove("hidden");return}
+    const conf=cb.dataset.conf;E.answer=ans;E.conf=conf;
+    tb.querySelectorAll("[data-conf]").forEach(x=>x.disabled=true);ta.disabled=true;
+    const ctl=busy(tb.querySelector("#eStat"),S.prefs.depth==="complex"?"Grading with deep reasoning. This can take a minute…":"Grading…");
+    try{
+      const listLang=S.prefs.lang==="id"?"Indonesian":"English";
+      const r=await AI.json(`${RULES}\n\n${conceptContext(n)}\n\nESSAY QUESTION: ${E.q.en}\nRUBRIC:\n${E.rubric.map(x=>"- "+x).join("\n")}\nLEARNER’S ANSWER (may be in English or Indonesian):\n"""${ans}"""\nLEARNER’S SELF-RATED CONFIDENCE: ${CONF.find(c=>c.k===conf).en}\n\nGrade the answer fairly. Reward correct understanding in the learner’s own words; do not reward length or fancy wording. Check each rubric point. Name any misconceptions explicitly. If the answer relies on a term you don’t know and that isn’t in the glossary, list it in unknown_terms instead of marking it wrong. Write got, missing and misconceptions in ${listLang}.\nReply with only JSON: {"score":0,"verdict":"understood|partial|not_yet","got":[""],"missing":[""],"misconceptions":[""],"feedback_en":"","feedback_id":"","model_answer_en":"","model_answer_id":"","unknown_terms":[""]}`,{modelTier:tier(),signal:ctl.signal});
+      if(!r||typeof r.score!=="number")throw {code:"invalid_json"};
+      r.score=Math.max(0,Math.min(100,Math.round(r.score)));
+      ["got","missing","misconceptions","unknown_terms"].forEach(k=>r[k]=(Array.isArray(r[k])?r[k]:[]).map(String).filter(Boolean));
+      const raw=(r.score-50)/50*20,mult=raw>=0?{guess:.5,fair:.85,sure:1.1}[conf]:{guess:.3,fair:.8,sure:1.3}[conf];
+      const delta=Math.round(raw*mult),right=r.score>=70;
+      record(n,right,conf,delta,"essay");
+      if(r.misconceptions.length&&conf==="sure"){n.miscon=true;save();render()}
+      E.res=r;E.delta=delta;renderPanel();
+    }catch(e){tb.querySelector("#eStat").innerHTML=`<p class="err">${esc(errMsg(e))}</p>`;tb.querySelectorAll("[data-conf]").forEach(x=>x.disabled=false);ta.disabled=false}
+  });
+}
+function renderEssayResult(n,tb,E){
+  const r=E.res,vword={understood:"Understood",partial:"Partly understood",not_yet:"Not yet"}[r.verdict]||"Graded";
+  const calib=E.conf==="sure"&&r.score<50?"You were certain, but the answer shows gaps. That’s a signal to review, not a failure.":E.conf==="guess"&&r.score>=70?"You understood more than you thought. Next time, trust it a little more.":"";
+  const list=(t,a)=>a.length?`<h3>${t}</h3><ul class="plain">${a.map(x=>`<li class="row-item">${esc(x)}</li>`).join("")}</ul>`:"";
+  tb.innerHTML=`<div class="card"><div class="split"><div><div class="kind">${vword}</div><div class="score">${r.score}<span class="muted" style="font-size:16px"> / 100</span></div></div><div class="muted small">Mastery ${E.delta>=0?"+":"−"}${Math.abs(E.delta)}%, now ${n.mastery}%</div></div>
+    ${calib?`<p class="small" style="margin-top:10px">${calib}</p>`:""}
+    <p style="margin-top:10px">${L({en:r.feedback_en,id:r.feedback_id})}</p></div>
+    ${list("What you got right",r.got)}${list("What’s missing",r.missing)}${r.misconceptions.length?`<h3>Misconceptions</h3><ul class="plain">${r.misconceptions.map(x=>`<li class="row-item"><span class="pill bad" style="margin:0 6px 0 0">Fix</span>${esc(x)}</li>`).join("")}</ul>`:""}
+    <details><summary>Model answer</summary><p class="summary" style="margin-top:8px;font-size:16px">${L({en:r.model_answer_en,id:r.model_answer_id})}</p></details>
+    <div id="teach"></div>
+    <div class="btnrow"><button class="btn small" id="eAgain">Try another question</button></div>`;
+  tb.querySelector("#eAgain").onclick=()=>{ESSAY[n.id]={};renderPanel()};
+  if(r.unknown_terms.length)teachBox(tb.querySelector("#teach"),r.unknown_terms);
+}
+function teachBox(el,terms){
+  el.innerHTML=`<div class="card warn" style="margin-top:14px"><p><strong>Claude wasn’t sure about these terms.</strong></p><p class="muted small">Teach it a definition so future questions, grading and answers stay accurate.</p>
+    ${terms.map((t,i)=>`<label class="lab" for="tch${i}">${esc(t)}</label><div class="split"><input class="field" id="tch${i}" data-term="${esc(t)}" placeholder="What does it mean?"><button class="btn small" data-tsave="${i}">Save</button></div>`).join("")}</div>`;
+  el.querySelectorAll("[data-tsave]").forEach(b=>b.onclick=()=>{
+    const inp=el.querySelector("#tch"+b.dataset.tsave),def=inp.value.trim();
+    if(!def){inp.focus();return}
+    addGlossary(inp.dataset.term,def);b.textContent="Saved";b.disabled=true;inp.disabled=true;
+  });
+}
+function addGlossary(term,def){
+  const i=S.glossary.findIndex(g=>g.term.toLowerCase()===term.toLowerCase());
+  if(i>-1)S.glossary[i].def=def;else S.glossary.push({term,def});
+  save();toast("Definition saved to your glossary");
+}
+
+/* ----- discuss ----- */
+function renderDiscuss(n,body){
+  if(!AI){body.innerHTML=`<div class="card" style="margin-top:12px"><p><strong>Discussion needs Claude.</strong></p><p class="muted">Open this page inside Claude and allow it to use Claude when asked.</p></div>`;return}
+  const turns=CHATS[n.id]||(CHATS[n.id]=[]);
+  const nb=[...neighbors(n.id)].filter(x=>x!==n.id).map(byId);
+  const starters=[`Explain ${n.label.en} simply, with an example from the field`,"Ask me a question to check my understanding","What do people often get wrong about this?"];
+  if(nb[0])starters.push(`How does it connect to ${nb[0].label.en}?`);
+  body.innerHTML=`<div class="chat" id="chat" style="margin-top:12px">${turns.map(t=>`<div class="bubble ${t.role==="user"?"me":"ai"}">${esc(t.content)}</div>`).join("")}</div>
+    ${turns.length?"":`<div class="btnrow" style="margin-bottom:10px">${starters.map((s,i)=>`<button class="btn small" data-start="${i}">${esc(s)}</button>`).join("")}</div>`}
+    <textarea class="field" rows="3" id="chatIn" placeholder="Ask anything about ${esc(T(n.label))}, in English or Indonesian" aria-label="Message"></textarea>
+    <div class="btnrow"><button class="btn primary small" id="chatSend">Send</button>${turns.length?`<button class="btn small" id="chatClear">Clear chat</button>`:""}</div><div id="chatStat"></div><div id="teach"></div>`;
+  const send=async text=>{
+    text=text.trim();if(!text)return;
+    turns.push({role:"user",content:text});renderPanel();
+    const chat=$("#chat"),bubble=document.createElement("div");bubble.className="bubble ai";bubble.textContent="Thinking…";chat.appendChild(bubble);
+    $("#chatSend").disabled=true;
+    const ctl=busy($("#chatStat"),"Claude is answering…");
+    const sys=`${RULES}\n\n${conceptContext(n)}\n\nYou are discussing this concept with the learner. Keep answers under 160 words, use one concrete example (construction, workshops, mining or marketing fit this learner well), and end with one short question that checks their understanding. When you introduce a key term, give it in English and Indonesian once, like “reach (jangkauan)”. ${langLine()} If the learner uses a term you don’t know and it isn’t in the glossary, ask them to define it instead of guessing.`;
+    try{
+      const {text:ans}=await AI([{role:"user",content:sys},{role:"assistant",content:"Understood. I’ll stay grounded in the concept information and the learner’s definitions."},...turns],{cache:false,signal:ctl.signal,modelTier:tier()==="complex"?"default":tier(),onText:({text})=>{bubble.textContent=text}});
+      turns.push({role:"assistant",content:ans});renderPanel();
+    }catch(e){bubble.textContent=e.text||"";turns.pop();$("#chatStat").innerHTML=`<p class="err">${esc(errMsg(e))}</p>`;$("#chatSend").disabled=false}
+  };
+  body.querySelectorAll("[data-start]").forEach(b=>b.onclick=()=>send(starters[+b.dataset.start]));
+  $("#chatSend").onclick=()=>send($("#chatIn").value);
+  $("#chatIn").onkeydown=e=>{if(e.key==="Enter"&&(e.metaKey||e.ctrlKey))send($("#chatIn").value)};
+  const cl=$("#chatClear");if(cl)cl.onclick=()=>{CHATS[n.id]=[];renderPanel()};
+  const chat=$("#chat");chat.lastElementChild&&chat.lastElementChild.scrollIntoView({block:"nearest"});
+}
+
+/* ----- path ----- */
+function chainBack(id,seen=new Set([id])){
+  const out=[];
+  S.links.filter(l=>l.status==="approved"&&tid(l)===id&&(l.type==="prerequisite"||l.type==="part_of")).forEach(l=>{const s=sid(l);if(seen.has(s))return;seen.add(s);out.push(...chainBack(s,seen),{id:s,type:l.type})});
+  return out;
+}
+function chainFwd(id,seen=new Set([id])){
+  const out=[];
+  S.links.filter(l=>l.status==="approved"&&sid(l)===id&&(l.type==="causes"||l.type==="prerequisite")).forEach(l=>{const t=tid(l);if(seen.has(t))return;seen.add(t);out.push({id:t,type:l.type},...chainFwd(t,seen))});
+  return out;
+}
+function renderPath(n,body){
+  const back=chainBack(n.id),fwd=chainFwd(n.id);
+  const item=(x,here)=>{const m=byId(x.id);return `<li class="${here?"here":""}">${here?`<span>${esc(T(m.label))}</span>`:nodeBtn(m.id)}<span class="sub">${here?"You are here":LEVEL_NAME[level(m.mastery)]+(m.miscon?", misconception":"")}</span></li>`};
+  body.innerHTML=`<h3>Order to learn it in</h3>${!back.length&&!fwd.length?`<p class="muted">No prerequisite or cause-and-effect links for this concept yet. They appear as you add sources and approve links.</p>`:`<p class="muted">Study from the top. Steps above build up to this concept; steps below are what it unlocks or leads to.</p>`}
+    <ol class="path">${back.map(x=>item(x)).join("")}${item({id:n.id},true)}${fwd.map(x=>item(x)).join("")}</ol>`;
+}
+
+/* ----- home ----- */
+function renderHome(){
+  const c={solid:0,shaky:0,unseen:0};S.nodes.forEach(n=>c[level(n.mastery)]++);
+  const d=due(),hist=S.nodes.flatMap(n=>n.hist);
+  const sure=hist.filter(h=>h.k==="sure"),guess=hist.filter(h=>h.k==="guess");
+  const pct=a=>a.length?Math.round(a.filter(h=>h.c).length/a.length*100):null;
+  const ps=pct(sure),pg=pct(guess);
+  const overlaps=[];
+  S.topics.forEach((a,i)=>S.topics.slice(i+1).forEach(b=>{const shared=S.nodes.filter(n=>n.topics.includes(a.key)&&n.topics.includes(b.key));if(shared.length)overlaps.push({a,b,shared})}));
+  const cross=S.links.filter(l=>l.status==="approved"&&!byId(sid(l)).topics.some(k=>byId(tid(l)).topics.includes(k)));
+  const pending=S.links.filter(l=>l.status==="suggested").length;
+  const syncText={account:"Saved to your Claude account, private to you.",device:"Saved in this browser.",error:"Couldn’t reach your account storage, so changes are saved in this browser for now.",toolarge:"Your map is too large to sync, so it’s saved in this browser."}[SYNC];
+  panel.innerHTML=`
+    <h2>Your knowledge map</h2>
+    <p class="muted">${S.nodes.length} concepts in ${S.topics.length} domains. Pick a concept to read it, test yourself, or discuss it with Claude.</p>
+    ${S.lastImport?importReport():""}
+    <h3>Mastery</h3>
+    <div class="stack">${["solid","shaky","unseen"].map(l=>`<div style="flex:${c[l]};background:var(--${l})"></div>`).join("")}</div>
+    <div class="keys">${["solid","shaky","unseen"].map(l=>`<span><span class="dot" style="background:var(--${l})"></span> ${LEVEL_NAME[l]} ${c[l]}</span>`).join("")}</div>
+    <h3>Confidence check</h3>
+    ${hist.length?`<p class="small" style="margin:0 0 4px">${ps!=null?`When you’re certain, you’re right <strong>${ps}%</strong> of the time (${sure.length} answers).`:"You haven’t answered with “Certain” yet."}</p><p class="muted small" style="margin:0">${pg!=null?`When you guess, you’re right ${pg}% of the time.`:""} ${ps!=null&&ps<80?"Being certain and wrong is the most important thing to catch, so those concepts come first in review.":""}</p>`:`<p class="muted">Each answer asks how sure you are. Over time this shows whether you really know a concept or are guessing.</p>`}
+    <h3>Due for review (${d.length})</h3>
+    <ul class="plain">${d.slice(0,6).map(n=>`<li class="row-item split"><span>${nodeBtn(n.id)}${n.miscon?`<span class="pill bad">Misconception</span>`:""}</span><span class="muted small">${n.mastery}%</span></li>`).join("")||`<li class="muted">Nothing due.</li>`}</ul>
+    <h3>Where domains overlap (${overlaps.length})</h3>
+    ${overlaps.length?`<ul class="plain">${overlaps.map(o=>`<li class="row-item"><span class="dot" style="background:var(--c${o.a.c%8})"></span> ${esc(T(o.a))} ∩ <span class="dot" style="background:var(--c${o.b.c%8})"></span> ${esc(T(o.b))}: ${o.shared.map(n=>nodeBtn(n.id)).join(", ")}</li>`).join("")}</ul>`:`<p class="muted">No concept belongs to two domains yet.</p>`}
+    <h3>Links across domains (${cross.length})</h3>
+    <ul class="plain">${cross.map(l=>`<li class="row-item">${sentence(l)}</li>`).join("")}</ul>
+    ${pending?`<p class="muted small">${pending} suggested link${pending>1?"s":""} waiting for review. They show as blue dashed lines.</p>`:""}
+    <h3>Your glossary (${S.glossary.length})</h3>
+    ${S.glossary.length?`<ul class="plain">${S.glossary.map((g,i)=>`<li class="row-item"><b style="font-weight:500">${esc(g.term)}</b><span class="alt">${esc(g.def)}</span><button class="link small" data-gdel="${i}">Remove</button></li>`).join("")}</ul>`:`<p class="muted">Terms you teach Claude appear here. Claude treats them as the source of truth.</p>`}
+    <div class="split" style="margin-top:10px"><input class="field" id="gTerm" placeholder="Term" aria-label="Term" style="max-width:38%"><input class="field" id="gDef" placeholder="Definition" aria-label="Definition"></div>
+    <div class="btnrow"><button class="btn small" id="gAdd">Teach this term</button></div>
+    <h3>About this map</h3>
+    <p class="muted small">${syncText} ${AI?"Claude is available for AI questions, essays, discussion and adding sources.":"Claude isn’t available in this view, so AI features are hidden."}</p>
+    <button class="link small" id="reset">Reset to the demo map</button>`;
+  wireGo(panel);
+  panel.querySelectorAll("[data-gdel]").forEach(b=>b.onclick=()=>{S.glossary.splice(+b.dataset.gdel,1);save();renderPanel()});
+  $("#gAdd").onclick=()=>{const t=$("#gTerm").value.trim(),d=$("#gDef").value.trim();if(!t||!d){toast("Enter a term and its definition");return}addGlossary(t,d);renderPanel()};
+  $("#reset").onclick=e=>{const b=e.currentTarget;if(!b.dataset.armed){b.dataset.armed="1";b.textContent="Click again to replace your map, scores and glossary with the demo";return}S=defaultState();save();selected=null;buildChips();syncControls();render();renderPanel();sim.alpha(1).restart()};
+  const ab=$("#approveAll");if(ab)ab.onclick=()=>{S.links.forEach(l=>{if(l.status==="suggested"&&(S.lastImport.links||[]).includes(sid(l)+">"+tid(l)))l.status="approved"});save();render();renderPanel();toast("Links approved")};
+  const cl=$("#closeImport");if(cl)cl.onclick=()=>{S.lastImport=null;save();renderPanel()};
+  if(S.lastImport&&S.lastImport.unknown&&S.lastImport.unknown.length)teachBox($("#impTeach"),S.lastImport.unknown);
+}
+function importReport(){
+  const r=S.lastImport,pend=(r.links||[]).filter(k=>S.links.some(l=>l.status==="suggested"&&sid(l)+">"+tid(l)===k)).length;
+  return `<div class="card dashed"><p><strong>Added from “${esc(r.title)}”</strong></p>
+    ${r.added.length?`<p class="small">New concepts: ${r.added.filter(byId).map(nodeBtn).join(", ")}</p>`:""}
+    ${r.merged.length?`<p class="small">Merged into existing: ${r.merged.filter(byId).map(nodeBtn).join(", ")}</p>`:""}
+    ${r.domains&&r.domains.length?`<p class="small">New domains: ${r.domains.map(k=>esc(T(topic(k)))).join(", ")}</p>`:""}
+    <p class="small">${pend} suggested link${pend===1?"":"s"} waiting for review.</p>
+    <div class="btnrow">${pend?`<button class="btn primary small" id="approveAll">Approve all links</button>`:""}<button class="btn small" id="closeImport">Dismiss</button></div>
+    <div id="impTeach"></div></div>`;
+}
+
+/* ================= add source ================= */
+const dlg=$("#addDlg");
+$("#addBtn").onclick=()=>{$("#srcErr").classList.add("hidden");$("#srcGo").disabled=!AI;$("#srcOffline").classList.toggle("hidden",!!S.demo);
+  if(!AI){$("#srcErr").textContent="Claude isn’t available in this view, so concepts can’t be extracted from your text. You can still add the offline demo.";$("#srcErr").classList.remove("hidden")}
+  dlg.showModal()};
+$("#srcCancel").onclick=()=>dlg.close();
+$("#srcSample").onclick=()=>{$("#srcTitle").value=SAMPLE_TITLE;$("#srcText").value=SAMPLE_TEXT};
+$("#srcOffline").onclick=()=>{applyOffline();dlg.close()};
+let srcCtl=null;
+$("#srcStop").onclick=()=>srcCtl&&srcCtl.abort();
+$("#srcGo").onclick=async()=>{
+  const title=$("#srcTitle").value.trim()||"Untitled source",text=$("#srcText").value.trim(),err=$("#srcErr");
+  err.classList.add("hidden");
+  if(text.split(/\s+/).length<25){err.textContent="Paste at least a paragraph so there’s something to learn from.";err.classList.remove("hidden");return}
+  srcCtl=new AbortController();$("#srcStatus").classList.remove("hidden");$("#srcStatusText").textContent="Reading and finding concepts. This can take a minute…";$("#srcGo").disabled=true;
+  try{
+    const r=await AI.json(`You build a bilingual (English and Indonesian) concept map for a learner.
+EXISTING DOMAINS (key: English / Indonesian):
+${S.topics.map(t=>`- ${t.key}: ${t.en} / ${t.id}`).join("\n")}
+EXISTING CONCEPTS (id: English label, domains):
+${S.nodes.map(n=>`- ${n.id}: ${n.label.en} [${n.topics.join(",")}]`).join("\n")}
+VERIFIED GLOSSARY (authoritative, follow over your own knowledge):
+${glossaryText()}
+SOURCE TITLE: ${title}
+SOURCE TEXT:
+"""${text.slice(0,24000)}"""
+
+Task:
+1. Extract the 3 to 7 most important concepts in the source.
+2. If a concept is the same idea as an existing concept, set existing_id to that id instead of creating a duplicate.
+3. Give each concept 1 or 2 domains. Reuse existing domain keys when they fit; otherwise add a new domain (short lowercase key, English and Indonesian names).
+4. Write summaries only from the source text and the glossary. Don’t add facts the source doesn’t support.
+5. Add 2 vocabulary pairs per concept: the English term, the Indonesian equivalent professionals actually use, and a short Indonesian example sentence.
+6. Propose links between concepts (new or existing) with type prerequisite, part_of, causes, contrasts, example_of or related, each with a one-sentence reason grounded in the source. Prefer links that connect different domains when the source supports them.
+7. List any terms in the source you aren’t confident you understand in unknown_terms.
+Reply with only JSON:
+{"new_domains":[{"key":"","en":"","id":""}],"concepts":[{"key":"","existing_id":null,"label_en":"","label_id":"","summary_en":"","summary_id":"","domains":[""],"source_note":"","vocab":[{"en":"","id":"","ex":""}]}],"links":[{"from":"","to":"","type":"","why_en":""}],"unknown_terms":[""]}`,{modelTier:tier(),signal:srcCtl.signal});
+    applyImport(title,r);dlg.close();$("#srcText").value="";$("#srcTitle").value="";
+  }catch(e){err.textContent=errMsg(e);err.classList.remove("hidden")}
+  $("#srcStatus").classList.add("hidden");$("#srcGo").disabled=false;srcCtl=null;
+};
+function applyImport(title,r){
+  if(!r||!Array.isArray(r.concepts))throw {code:"invalid_json"};
+  const report={title,added:[],merged:[],domains:[],links:[],unknown:(r.unknown_terms||[]).map(String).filter(Boolean).slice(0,6)};
+  (r.new_domains||[]).forEach(d=>{
+    if(!d||!d.en)return;let key=slug(d.key||d.en);if(topic(key))return;
+    S.topics.push({key,en:String(d.en),id:String(d.id||d.en),c:S.topics.length});report.domains.push(key);
+  });
+  const keyMap={};
+  r.concepts.forEach(c=>{
+    if(!c||!c.label_en)return;
+    const doms=(c.domains||[]).map(k=>topic(k)?k:topic(slug(k))?slug(k):null).filter(Boolean);
+    const src={t:title,n:String(c.source_note||"Mentioned in this source.")};
+    const vocab=(c.vocab||[]).filter(v=>v&&v.en&&v.id).map(v=>({en:String(v.en),id:String(v.id),ex:String(v.ex||"")}));
+    let ex=c.existing_id&&byId(c.existing_id);
+    if(!ex)ex=S.nodes.find(n=>n.label.en.toLowerCase()===String(c.label_en).toLowerCase());
+    if(ex){
+      if(!ex.sources.some(s=>s.t===title))ex.sources.push(src);
+      doms.forEach(k=>{if(!ex.topics.includes(k)&&ex.topics.length<3)ex.topics.push(k)});
+      vocab.forEach(v=>{if(!ex.vocab.some(x=>x.en.toLowerCase()===v.en.toLowerCase()))ex.vocab.push(v)});
+      keyMap[c.key||c.label_en]=ex.id;if(c.existing_id)keyMap[c.existing_id]=ex.id;report.merged.push(ex.id);
+    }else{
+      const id=uniqueId(slug(c.label_en));
+      const topics=doms.length?doms:[report.domains[0]||S.topics[0].key];
+      const n={id,label:B(String(c.label_en),String(c.label_id||c.label_en)),topics,mastery:0,summary:B(String(c.summary_en||""),String(c.summary_id||c.summary_en||"")),sources:[src],vocab,quiz:[],hist:[],miscon:false,auto:true,origin:title};
+      AN=anchors();n.x=ax(n)+(Math.random()*60-30);n.y=ay(n)+(Math.random()*60-30);
+      S.nodes.push(n);keyMap[c.key||c.label_en]=id;report.added.push(id);
+    }
+  });
+  const resolve=k=>keyMap[k]||(byId(k)?k:null);
+  (r.links||[]).forEach(l=>{
+    if(!l)return;const s=resolve(l.from),t=resolve(l.to);
+    if(!s||!t||s===t||!TYPES[l.type])return;
+    if(S.links.some(x=>(sid(x)===s&&tid(x)===t)||(sid(x)===t&&tid(x)===s)))return;
+    S.links.push({source:s,target:t,type:l.type,status:"suggested",why:{en:String(l.why_en||"")}});report.links.push(s+">"+t);
+  });
+  S.lastImport=report;
+  save();buildChips();render();sim.alpha(.8).restart();selected=null;renderPanel();
+  toast(`Added ${report.added.length} new concept${report.added.length===1?"":"s"}, merged ${report.merged.length}`);
+}
+function applyOffline(){
+  if(S.demo){toast("The offline demo is already in your map");return}
+  S.demo=true;
+  const report={title:SAMPLE_TITLE,added:[],merged:[],domains:[],links:[],unknown:[]};
+  OFFLINE.nodes.forEach(n=>{if(byId(n.id))return;const c={...clone(n),hist:[],miscon:false};AN=anchors();c.x=ax(c)+(Math.random()*40-20);c.y=ay(c)+(Math.random()*40-20);S.nodes.push(c);report.added.push(c.id)});
+  const m=byId(OFFLINE.merge.id);if(m&&!m.sources.some(s=>s.t===SAMPLE_TITLE)){m.sources.push(OFFLINE.merge.source);report.merged.push(m.id)}
+  OFFLINE.links.forEach(l=>{if(!S.links.some(x=>sid(x)===l.source&&tid(x)===l.target)){S.links.push(clone(l));report.links.push(l.source+">"+l.target)}});
+  S.lastImport=report;save();render();sim.alpha(.8).restart();selected=null;renderPanel();toast("Offline demo source added");
+}
+
+$("#reviewBtn").onclick=()=>{const d=due();if(d.length){testMode="mcq";select(d[0].id,"test")}else toast("Nothing due. Every concept is solid.")};
+
+/* ================= start ================= */
+syncControls();buildChips();buildLegend();render();renderPanel();
+initCloud();
+</script>
+</body>
+</html>
