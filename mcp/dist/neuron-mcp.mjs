@@ -6022,7 +6022,10 @@ var GRAPH_TABLES = [
   "glossary",
   "chats",
   "review_cards",
-  "embeddings"
+  "embeddings",
+  "study_items",
+  "study_adapt",
+  "claims"
 ];
 function seedDemo(db2) {
   const s = db2.$client;
@@ -6136,6 +6139,11 @@ function migrate(sqlite) {
   sqlite.exec("CREATE INDEX IF NOT EXISTS idx_chunks_source ON chunks(source_id)");
   sqlite.exec("CREATE TABLE IF NOT EXISTS writings (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL DEFAULT 'writing', title TEXT NOT NULL, body TEXT NOT NULL, brief_json TEXT NOT NULL DEFAULT '{}', concept_ids TEXT NOT NULL DEFAULT '[]', lang TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
   sqlite.exec("CREATE TABLE IF NOT EXISTS lessons (id INTEGER PRIMARY KEY AUTOINCREMENT, goal TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'probing', start_summary TEXT, probe_json TEXT NOT NULL DEFAULT '[]', steps_json TEXT NOT NULL DEFAULT '[]', current INTEGER NOT NULL DEFAULT 0, summary TEXT, next_json TEXT NOT NULL DEFAULT '[]', lang TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
+  sqlite.exec("CREATE TABLE IF NOT EXISTS study_items (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id INTEGER NOT NULL, chunk_id INTEGER NOT NULL, concept_id TEXT, lang TEXT, question TEXT NOT NULL, options_json TEXT NOT NULL, answer INTEGER NOT NULL, why TEXT, by TEXT NOT NULL DEFAULT 'app', choice INTEGER, correct INTEGER, confidence TEXT, answered_at INTEGER, created_at INTEGER NOT NULL)");
+  sqlite.exec("CREATE INDEX IF NOT EXISTS idx_study_items_source ON study_items(source_id)");
+  sqlite.exec("CREATE TABLE IF NOT EXISTS study_adapt (chunk_id INTEGER NOT NULL, mode TEXT NOT NULL, lang TEXT NOT NULL, source_id INTEGER NOT NULL, text TEXT NOT NULL, by TEXT NOT NULL DEFAULT 'app', created_at INTEGER NOT NULL, PRIMARY KEY (chunk_id, mode, lang))");
+  sqlite.exec("CREATE TABLE IF NOT EXISTS claims (id INTEGER PRIMARY KEY AUTOINCREMENT, concept_id TEXT NOT NULL, text TEXT NOT NULL, because_json TEXT NOT NULL DEFAULT '[]', source_id INTEGER, chunk_id INTEGER, quote TEXT, status TEXT NOT NULL DEFAULT 'unchecked', note TEXT, evidence TEXT, checked_by TEXT, checked_at INTEGER, by TEXT NOT NULL DEFAULT 'ai', lang TEXT, position INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
+  sqlite.exec("CREATE INDEX IF NOT EXISTS idx_claims_concept ON claims(concept_id)");
   if (!has("writings", "post_json")) sqlite.exec("ALTER TABLE writings ADD COLUMN post_json TEXT");
   sqlite.exec("CREATE TABLE IF NOT EXISTS embeddings (kind TEXT NOT NULL, ref_id TEXT NOT NULL, model TEXT NOT NULL, hash TEXT NOT NULL, vector BLOB NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (kind, ref_id))");
   if (!has("models", "purpose")) {
@@ -8459,6 +8467,26 @@ function recordExternal(conceptId, r) {
 function addMcq(conceptId, p, bridge) {
   return db().insert(schema_exports.questions).values({ conceptId, kind: "mcq", payloadJson: JSON.stringify(p), bridgeConceptId: bridge, aiGenerated: true, createdAt: now2() }).returning({ id: schema_exports.questions.id }).get().id;
 }
+function listSources() {
+  const d = db();
+  const srcs = d.select().from(schema_exports.sources).all().sort((a, b) => b.createdAt - a.createdAt || b.id - a.id);
+  const cs = d.select().from(schema_exports.conceptSources).all();
+  const cons = d.select().from(schema_exports.concepts).all();
+  const chunkCount = new Map(d.$client.prepare("SELECT source_id AS s, COUNT(*) AS n FROM chunks GROUP BY source_id").all().map((x) => [x.s, x.n]));
+  return srcs.map((s) => ({
+    id: s.id,
+    title: s.title,
+    kind: s.kind,
+    urlOrPath: s.urlOrPath,
+    createdAt: s.createdAt,
+    chunks: chunkCount.get(s.id) || 0,
+    words: s.text ? s.text.trim().split(/\s+/).length : 0,
+    concepts: [...new Set(cs.filter((x) => x.sourceId === s.id).map((x) => x.conceptId))].map((id) => cons.find((c) => c.id === id)).filter(Boolean).map((c) => ({ id: c.id, label: { en: c.labelEn, id: c.labelId } }))
+  }));
+}
+function getSource(id) {
+  return db().select().from(schema_exports.sources).where(eq(schema_exports.sources.id, id)).get() || null;
+}
 function applyImport(title, text2, r, meta = {}, similar = []) {
   if (!r || !Array.isArray(r.concepts)) throw new Error("invalid_json");
   const d = db();
@@ -8640,6 +8668,125 @@ function answerLessonCheck(id, idx, r) {
   saveLesson(l);
   return { lesson: getLesson(id), mastery };
 }
+var toItem = (r) => ({ id: r.id, chunkId: r.chunk_id, conceptId: r.concept_id, question: r.question, options: pj(r.options_json, []), answer: r.answer, why: r.why, by: r.by === "claude" ? "claude" : "app", choice: r.choice, correct: r.correct == null ? null : !!r.correct, confidence: r.confidence || null, answeredAt: r.answered_at });
+function getStudy(sourceId, lang) {
+  const src = getSource(sourceId);
+  if (!src) return null;
+  const c = db().$client;
+  const chunks2 = c.prepare("SELECT id, idx, page, text FROM chunks WHERE source_id = ? ORDER BY idx").all(sourceId);
+  const cites = c.prepare("SELECT chunk_id AS ch, concept_id AS co FROM concept_sources WHERE source_id = ? AND chunk_id IS NOT NULL").all(sourceId);
+  const items = c.prepare("SELECT * FROM study_items WHERE source_id = ? AND (lang = ? OR lang IS NULL) ORDER BY id").all(sourceId, lang).map(toItem);
+  const adapts = c.prepare("SELECT chunk_id AS ch, mode, text FROM study_adapt WHERE source_id = ? AND lang = ?").all(sourceId, lang);
+  const passages = chunks2.map((k) => ({
+    chunkId: k.id,
+    idx: k.idx,
+    page: k.page,
+    text: k.text,
+    concepts: [...new Set(cites.filter((x) => x.ch === k.id).map((x) => x.co))],
+    items: items.filter((i) => i.chunkId === k.id),
+    adapted: Object.fromEntries(adapts.filter((a) => a.ch === k.id).map((a) => [a.mode, a.text]))
+  }));
+  const pos = getSetting("study_pos", {})[String(sourceId)] ?? 0;
+  return { source: { id: src.id, title: src.title, url: src.urlOrPath && /^https?:/.test(src.urlOrPath) ? src.urlOrPath : null }, lang, passages, pos };
+}
+function addStudyItems(sourceId, lang, items, by) {
+  const c = db().$client, t = now2();
+  const okChunk = new Set(c.prepare("SELECT id FROM chunks WHERE source_id = ?").all(sourceId).map((x) => x.id));
+  const okConcept = new Set(db().select({ id: schema_exports.concepts.id }).from(schema_exports.concepts).all().map((x) => x.id));
+  const ins = c.prepare("INSERT INTO study_items (source_id, chunk_id, concept_id, lang, question, options_json, answer, why, by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+  const cites = c.prepare("SELECT chunk_id AS ch, concept_id AS co FROM concept_sources WHERE source_id = ? AND chunk_id IS NOT NULL").all(sourceId);
+  const only = (ch) => {
+    const cs = [...new Set(cites.filter((x) => x.ch === ch).map((x) => x.co))];
+    return cs.length === 1 ? cs[0] : null;
+  };
+  let n = 0;
+  for (const it of items) {
+    if (!okChunk.has(it.chunkId) || !it.question || !Array.isArray(it.options) || it.options.length < 2 || !(it.answer >= 0 && it.answer < it.options.length)) continue;
+    ins.run(sourceId, it.chunkId, it.conceptId && okConcept.has(it.conceptId) ? it.conceptId : only(it.chunkId), lang, it.question.slice(0, 600), JSON.stringify(it.options.map((o) => String(o).slice(0, 300))), it.answer, it.why ? String(it.why).slice(0, 800) : null, by, t);
+    n++;
+  }
+  return n;
+}
+function saveStudyAdapt(sourceId, chunkId, mode, lang, text2, by) {
+  db().$client.prepare("INSERT OR REPLACE INTO study_adapt (chunk_id, mode, lang, source_id, text, by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(chunkId, mode, lang, sourceId, text2.slice(0, 6e3), by, now2());
+}
+function deleteStudyItems(sourceId, chunkId) {
+  if (chunkId) db().$client.prepare("DELETE FROM study_items WHERE source_id = ? AND chunk_id = ?").run(sourceId, chunkId);
+  else db().$client.prepare("DELETE FROM study_items WHERE source_id = ?").run(sourceId);
+}
+var CLAIM_STATUSES = ["unchecked", "supported", "partly", "unsupported", "contradicted", "disputed"];
+var toClaim = (r) => ({
+  id: r.id,
+  conceptId: r.concept_id,
+  text: r.text,
+  because: pj(r.because_json, []),
+  sourceId: r.source_id,
+  sourceTitle: r.title ?? null,
+  chunkId: r.chunk_id,
+  page: r.page ?? null,
+  quote: r.quote,
+  status: CLAIM_STATUSES.includes(r.status) ? r.status : "unchecked",
+  note: r.note,
+  evidence: r.evidence,
+  checkedBy: r.checked_by || null,
+  checkedAt: r.checked_at,
+  by: r.by || "ai",
+  createdAt: r.created_at,
+  updatedAt: r.updated_at
+});
+var CLAIM_SELECT = "SELECT c.*, s.title AS title, k.page AS page FROM claims c LEFT JOIN sources s ON s.id = c.source_id LEFT JOIN chunks k ON k.id = c.chunk_id";
+function listClaims(opts = {}) {
+  const where = [], args = [];
+  if (opts.concept) {
+    where.push("c.concept_id = ?");
+    args.push(opts.concept);
+  }
+  if (opts.status) {
+    where.push("c.status = ?");
+    args.push(opts.status);
+  }
+  return db().$client.prepare(`${CLAIM_SELECT}${where.length ? " WHERE " + where.join(" AND ") : ""} ORDER BY c.concept_id, c.position, c.id`).all(...args).map(toClaim);
+}
+function getClaim(id) {
+  const r = db().$client.prepare(`${CLAIM_SELECT} WHERE c.id = ?`).get(id);
+  return r ? toClaim(r) : null;
+}
+function conceptPassages(conceptId) {
+  const c = db().$client;
+  const rows = c.prepare("SELECT DISTINCT k.id AS chunkId, k.source_id AS sourceId, s.title AS title, k.page AS page, k.text AS text FROM concept_sources cs JOIN chunks k ON k.id = cs.chunk_id JOIN sources s ON s.id = k.source_id WHERE cs.concept_id = ? ORDER BY k.source_id, k.idx").all(conceptId);
+  const notes = c.prepare("SELECT s.id AS sourceId, s.title AS title, cs.note AS note, cs.quote AS quote FROM concept_sources cs JOIN sources s ON s.id = cs.source_id WHERE cs.concept_id = ? AND cs.chunk_id IS NULL").all(conceptId);
+  return { passages: rows, notes };
+}
+function addClaims(conceptId, items, by, lang, replace = false) {
+  const c = db().$client, t = now2();
+  if (!db().select().from(schema_exports.concepts).where(eq(schema_exports.concepts.id, conceptId)).get()) throw new Error(`No concept ${conceptId}`);
+  if (replace) c.prepare("DELETE FROM claims WHERE concept_id = ? AND by != 'you'").run(conceptId);
+  const chunkSrc = (id) => c.prepare("SELECT source_id AS s FROM chunks WHERE id = ?").get(id)?.s ?? null;
+  let pos = c.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS n FROM claims WHERE concept_id = ?").get(conceptId).n;
+  const ins = c.prepare("INSERT INTO claims (concept_id, text, because_json, source_id, chunk_id, quote, by, lang, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+  const ids = [];
+  for (const it of items) {
+    const text2 = String(it.text || "").trim();
+    if (!text2) continue;
+    const chunk = it.chunkId && chunkSrc(Number(it.chunkId)) != null ? Number(it.chunkId) : null;
+    const src = chunk ? chunkSrc(chunk) : it.sourceId ?? null;
+    ids.push(Number(ins.run(conceptId, text2.slice(0, 500), JSON.stringify((it.because || []).map((b) => String(b).trim()).filter(Boolean).slice(0, 5).map((b) => b.slice(0, 400))), src, chunk, it.quote ? String(it.quote).slice(0, 600) : null, by, lang, pos++, t, t).lastInsertRowid));
+  }
+  return ids;
+}
+function setClaimCheck(id, status, note, by, evidence) {
+  if (!CLAIM_STATUSES.includes(status)) throw new Error(`status must be one of ${CLAIM_STATUSES.join(", ")}`);
+  db().$client.prepare("UPDATE claims SET status = ?, note = ?, evidence = COALESCE(?, evidence), checked_by = ?, checked_at = ?, updated_at = ? WHERE id = ?").run(status, note ? String(note).slice(0, 800) : null, evidence ? String(evidence).slice(0, 500) : null, status === "unchecked" ? null : by, status === "unchecked" ? null : now2(), now2(), id);
+}
+function claimCounts() {
+  const rows = db().$client.prepare("SELECT status, COUNT(*) AS n FROM claims GROUP BY status").all();
+  const byStatus = Object.fromEntries(CLAIM_STATUSES.map((s) => [s, 0]));
+  rows.forEach((r) => {
+    if (r.status in byStatus) byStatus[r.status] = r.n;
+  });
+  const concepts2 = db().$client.prepare("SELECT COUNT(DISTINCT concept_id) AS n FROM claims").get().n;
+  return { total: rows.reduce((s, r) => s + r.n, 0), byStatus, concepts: concepts2 };
+}
 
 // lib/lesson-guide.ts
 var TEACH_STEPS = [
@@ -8660,6 +8807,13 @@ var FORMAT_GUIDE = {
   figure: '```svg\n<svg viewBox="0 0 320 160" xmlns="http://www.w3.org/2000/svg">\u2026</svg>\n```\nA simple hand-made figure (axes, curves, labeled shapes). It is shown as an image; scripts and external files don\'t load. Use currentColor-free explicit colors that read on light and dark (e.g. #2f6fde, #e0a020, #888).',
   images: "![alt text](https://\u2026) only for real, freely licensed images you are confident exist (e.g. upload.wikimedia.org). Prefer mermaid or svg you draw yourself.",
   length: "One step's explanation: 120-350 words plus at most two visuals."
+};
+
+// lib/ai/prompts.ts
+var STUDY_MODES = {
+  simple: "Rewrite the passage so a curious 15-year-old understands it on first read: short sentences, everyday words, one idea per sentence. Define any technical term in plain words the first time. Keep every fact, number and claim; add nothing that isn't in the passage.",
+  interest: "Rewrite the passage around the learner's interests: replace or add the examples and analogies with ones from those interests, so the idea connects to something they already know. Keep every fact, number and claim from the passage exactly. Wrap each sentence you changed or added for the learner in ==double equals== so they can see what was personalised.",
+  deeper: "Go one level deeper than the passage: explain the mechanism behind it (why it works), one consequence or edge case, and how it connects to related concepts on the learner's map if any are listed. Use an equation in $\u2026$ or a small ```mermaid flowchart only if it really helps. Keep what the passage says as the base; mark anything beyond the passage with 'Beyond the text:' at the start of that paragraph."
 };
 
 // lib/search.ts
@@ -9106,7 +9260,7 @@ var BLOG_STEPS = [
 ];
 
 // mcp/server.ts
-var SERVER = { name: "neuron", version: "0.7.0" };
+var SERVER = { name: "neuron", version: "0.9.0" };
 var SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
 var INSTRUCTIONS = `Neuron is the user's personal knowledge map: concepts from what they read, linked across topics, with mastery scores, spaced review and a glossary. The user is Indonesian and learns in English and Indonesian; reply in the language they use. neuron_overview tells you who they are (name, background, interests): take your examples from their interests.
 - The user's own definitions and glossary terms are the source of truth. Prefer them over your own knowledge and say when they differ.
@@ -9116,6 +9270,8 @@ var INSTRUCTIONS = `Neuron is the user's personal knowledge map: concepts from w
 - Links you create are suggestions; the user approves them in the app. Ask before changing definitions.
 - To write anything for the user (essay, post, script, email, report...): call neuron_writing_guide first and ask its rhetorical-situation brief (who is speaking, audience, genre, purpose, stance, context, culture, then optional craft questions), each with how-to-answer guidance and examples. Don't write before the core answers are in unless the user says so. Then offer neuron_save_writing.
 - When the user wants to learn or understand something ("teach me", "I want to understand\u2026", "explain \u2026 so I really get it"): run a lesson. Call neuron_lesson_start and follow its steps: probe what they know, plan, then teach one step at a time with a prediction, a clear explanation (mermaid flowcharts, LaTeX equations, svg figures, tables where they help) and a check. Save every step with neuron_lesson_step so the lesson appears in the app.
+- To prepare a source for the Study reader ("prepare \u2026 for study"): call neuron_study_get, write one understanding question per passage grounded only in that passage, plus the simpler / interest / deeper versions if asked, and save them with neuron_study_save.
+- Claims: each concept can hold its key claims with reasons, quotes and a check status. Treat supported claims as ground truth; don't build on contradicted, unsupported or disputed ones without saying so. To fact-check ("fact-check \u2026", "is this right?"): neuron_claims_get, then neuron_claims_save (new claims from the passages) and neuron_claims_check. If you can search the web, use it only to mark claims disputed or supported beyond the source, and give the link as evidence.
 - To turn their research into a blog post: follow the steps from neuron_writing_guide with preset 'blog' (start with neuron_research_pack). Their Settings prefill most of the brief; confirm it with them instead of asking everything again.
 - When the user asks to save, input or keep the result of a discussion: draft a note (summary, key points, their conclusions, open questions, next steps, concepts), show it, and call neuron_save_discussion after they approve. Keep what the user said apart from what you suggested. Then offer to save their definitions, new terms or new concepts with the other tools.`;
 var cache = null;
@@ -9129,7 +9285,8 @@ function find(g2, q) {
 var dname = (g2, k) => g2.domains.find((d) => d.key === k)?.name.en || k;
 var brief = (g2, c) => ({ id: c.id, label_en: c.label.en, label_id: c.label.id, domains: c.domains.map((k) => dname(g2, k)), mastery: c.mastery, misconception: c.miscon, due_for_review: c.miscon || (c.review ? c.review.due <= Date.now() : c.mastery < 60) });
 var iso = (t) => t ? new Date(t).toISOString() : null;
-var CONF = ["guess", "fair", "sure"];
+var CONF2 = ["guess", "fair", "sure"];
+var claimBrief = (c) => ({ id: c.id, claim: c.text, because: c.because, status: c.status, note: c.note, quote: c.quote, source: c.sourceTitle });
 function conceptIds(list) {
   const g2 = graph(), ids = [], unknown = [];
   for (const x of Array.isArray(list) ? list : []) {
@@ -9202,7 +9359,8 @@ var TOOLS = [
         links: g2.links.filter((l) => l.from === c.id || l.to === c.id).map((l) => ({ text: `${lab(l.from)} ${TYPES[l.type].say.en} ${lab(l.to)}`, from: l.from, to: l.to, type: l.type, status: l.status })),
         review: c.review ? { next: iso(c.review.due), reviews: c.review.reps, forgotten: c.review.lapses, memory_strength_days: c.review.stability } : null,
         questions: c.quiz.map((q) => ({ question: q.q.en, question_id: q.q.id, options: q.o.map((o) => o.en), answer_index: q.a, why: q.why.en })),
-        glossary: g2.glossary
+        glossary: g2.glossary,
+        claims: listClaims({ concept: c.id }).map(claimBrief)
       };
     }
   },
@@ -9219,10 +9377,10 @@ var TOOLS = [
   {
     name: "neuron_record_result",
     description: "Record the user's answer to a question you asked, with how sure they were. Updates mastery, misconception flag and the spaced-review schedule exactly like the app. kind 'quiz' needs correct; kind 'essay' needs score 0-100.",
-    inputSchema: { type: "object", properties: { concept: str, kind: { type: "string", enum: ["quiz", "essay"] }, correct: { type: "boolean" }, score: { type: "number" }, confidence: { type: "string", enum: CONF }, note: { ...str, description: "Short note: the question and their answer" } }, required: ["concept", "kind", "confidence"] },
+    inputSchema: { type: "object", properties: { concept: str, kind: { type: "string", enum: ["quiz", "essay"] }, correct: { type: "boolean" }, score: { type: "number" }, confidence: { type: "string", enum: CONF2 }, note: { ...str, description: "Short note: the question and their answer" } }, required: ["concept", "kind", "confidence"] },
     run: (a) => {
       const g2 = graph(), c = find(g2, a.concept);
-      if (!CONF.includes(a.confidence)) throw new Error("confidence must be guess, fair or sure");
+      if (!CONF2.includes(a.confidence)) throw new Error("confidence must be guess, fair or sure");
       if (a.kind === "quiz" && typeof a.correct !== "boolean") throw new Error("quiz results need correct: true or false");
       if (a.kind === "essay" && typeof a.score !== "number") throw new Error("essay results need a score from 0 to 100");
       const r = recordExternal(c.id, { kind: a.kind, correct: a.correct, score: a.score, confidence: a.confidence, note: a.note ? String(a.note).slice(0, 300) : void 0 });
@@ -9329,7 +9487,8 @@ var TOOLS = [
           misconception: c.miscon,
           user_definition: c.userDef || null,
           summary: c.summary.en,
-          needs_first: chainBack(g2.links, c.id).map((p) => ({ id: p.id, label: lab(p.id), mastery: g2.concepts.find((x) => x.id === p.id)?.mastery ?? null }))
+          needs_first: chainBack(g2.links, c.id).map((p) => ({ id: p.id, label: lab(p.id), mastery: g2.concepts.find((x) => x.id === p.id)?.mastery ?? null })),
+          claims: listClaims({ concept: c.id }).filter((x) => x.status !== "contradicted").map(claimBrief)
         })),
         passages: r.passages.slice(0, 4).map((p) => ({ source: p.sourceTitle, page: p.page, text: (p.text || "").slice(0, 600) })),
         glossary: g2.glossary,
@@ -9348,7 +9507,7 @@ var TOOLS = [
       properties: {
         lesson_id: { type: "integer" },
         start_summary: { ...str, description: "2-3 sentences: what they already understand, what's missing, any misconception" },
-        probe: { type: "array", items: { type: "object", required: ["question", "answer", "verdict"], properties: { concept: str, question: str, answer: { ...str, description: "What the learner said, briefly" }, verdict: { type: "string", enum: ["knows", "partly", "gap", "misconception"] }, confidence: { type: "string", enum: CONF }, note: str } } },
+        probe: { type: "array", items: { type: "object", required: ["question", "answer", "verdict"], properties: { concept: str, question: str, answer: { ...str, description: "What the learner said, briefly" }, verdict: { type: "string", enum: ["knows", "partly", "gap", "misconception"] }, confidence: { type: "string", enum: CONF2 }, note: str } } },
         steps: { type: "array", minItems: 1, maxItems: 12, items: { type: "object", required: ["title"], properties: { title: str, concept: { ...str, description: "Existing concept id or label, if the step is about one" }, why: { ...str, description: "Why this step comes here" } } } }
       }
     },
@@ -9367,7 +9526,7 @@ var TOOLS = [
       const old = new Map(l.steps.map((s) => [s.title, s]));
       l.steps = a.steps.map((s) => old.get(String(s.title)) || { title: String(s.title).slice(0, 160), concept: cid(s.concept), why: s.why ? String(s.why) : void 0, status: "todo" });
       l.startSummary = String(a.start_summary);
-      if (Array.isArray(a.probe)) l.probe = a.probe.map((p) => ({ concept: cid(p.concept), question: String(p.question), answer: String(p.answer), verdict: p.verdict, confidence: CONF.includes(p.confidence) ? p.confidence : null, note: p.note ? String(p.note) : void 0 }));
+      if (Array.isArray(a.probe)) l.probe = a.probe.map((p) => ({ concept: cid(p.concept), question: String(p.question), answer: String(p.answer), verdict: p.verdict, confidence: CONF2.includes(p.confidence) ? p.confidence : null, note: p.note ? String(p.note) : void 0 }));
       l.status = "active";
       l.current = Math.min(l.current, l.steps.length - 1);
       saveLesson(l);
@@ -9387,7 +9546,7 @@ var TOOLS = [
         prediction: { ...str, description: "What the learner guessed" },
         explanation: { ...str, description: "The explanation in Markdown, including diagrams and math" },
         check: { type: "object", required: ["question"], properties: { question: str, options: { type: "array", items: str, maxItems: 6 }, answer_index: { type: "integer", minimum: 0 }, why: str } },
-        result: { type: "object", required: ["correct", "confidence"], properties: { correct: { type: "boolean" }, confidence: { type: "string", enum: CONF }, answer: { ...str, description: "What the learner answered" }, misconception: { ...str, description: "The confusion behind a wrong answer, in one sentence" }, feedback: str } }
+        result: { type: "object", required: ["correct", "confidence"], properties: { correct: { type: "boolean" }, confidence: { type: "string", enum: CONF2 }, answer: { ...str, description: "What the learner answered" }, misconception: { ...str, description: "The confusion behind a wrong answer, in one sentence" }, feedback: str } }
       }
     },
     run: (a) => {
@@ -9404,7 +9563,7 @@ var TOOLS = [
       saveLesson(l);
       let mastery = null;
       if (a.result && typeof a.result.correct === "boolean") {
-        if (!CONF.includes(a.result.confidence)) throw new Error("result.confidence must be guess, fair or sure");
+        if (!CONF2.includes(a.result.confidence)) throw new Error("result.confidence must be guess, fair or sure");
         const r = answerLessonCheck(l.id, i, { correct: a.result.correct, confidence: a.result.confidence, answer: a.result.answer ? String(a.result.answer) : void 0, misconception: a.result.misconception ? String(a.result.misconception) : void 0, feedback: a.result.feedback ? String(a.result.feedback) : void 0, by: "claude" });
         mastery = r.mastery ? { concept: s.concept, change: r.mastery.delta, now: r.mastery.mastery } : null;
       }
@@ -9439,6 +9598,131 @@ var TOOLS = [
     }
   },
   {
+    name: "neuron_study_get",
+    description: "Get a source's passages for the Study reader: each passage's id, text, the concepts that cite it, and whether it already has a question or rewritten versions. Without source, lists sources that can be studied.",
+    inputSchema: { type: "object", properties: { source: { ...str, description: "Source id or title (part of it is fine)" }, lang: { type: "string", enum: ["en", "id"] }, from: { type: "integer", description: "First passage number (1-based), for long sources" }, count: { type: "integer", description: "How many passages (default 12)" } } },
+    annotations: { readOnlyHint: true },
+    run: (a) => {
+      const all = listSources().filter((x) => x.chunks > 0);
+      if (!a.source) return { sources: all.map((x) => ({ id: x.id, title: x.title, passages: x.chunks })) };
+      const q = String(a.source).toLowerCase(), src = all.find((x) => String(x.id) === q) || all.find((x) => x.title.toLowerCase().includes(q));
+      if (!src) throw new Error(`No source matches "${a.source}". Call neuron_study_get without source to list them.`);
+      const lang = a.lang === "id" || a.lang === "en" ? a.lang : graph().prefs.lang;
+      const st2 = getStudy(src.id, lang), from = Math.max(1, Number(a.from) || 1), n = Math.min(30, Number(a.count) || 12);
+      return {
+        source_id: src.id,
+        title: src.title,
+        language: lang,
+        total_passages: st2.passages.length,
+        learner: graph().profile,
+        passages: st2.passages.slice(from - 1, from - 1 + n).map((p, i) => ({ number: from + i, chunk_id: p.chunkId, page: p.page, text: p.text, concepts: p.concepts, has_question: p.items.length > 0, has_versions: Object.keys(p.adapted) })),
+        how: { question: "One multiple-choice question per passage that tests understanding (why, what follows, which example fits), answerable from that passage alone; 4 options of similar length with plausible wrong ones; a short why. Skip passages with nothing to test.", versions: STUDY_MODES },
+        next: from - 1 + n < st2.passages.length ? `Call again with from: ${from + n} for the rest.` : "That's all the passages."
+      };
+    }
+  },
+  {
+    name: "neuron_study_save",
+    description: "Save questions (one per passage) and optional rewritten versions of passages for the Study reader. Questions answered in the reader update mastery and review for their concept.",
+    inputSchema: {
+      type: "object",
+      required: ["source_id"],
+      properties: {
+        source_id: { type: "integer" },
+        lang: { type: "string", enum: ["en", "id"] },
+        questions: { type: "array", items: { type: "object", required: ["chunk_id", "question", "options", "answer_index"], properties: { chunk_id: { type: "integer" }, concept: { ...str, description: "Concept id from that passage's concepts, if it's about one" }, question: str, options: { type: "array", items: str, minItems: 2, maxItems: 6 }, answer_index: { type: "integer", minimum: 0 }, why: str } } },
+        versions: { type: "array", items: { type: "object", required: ["chunk_id", "mode", "text"], properties: { chunk_id: { type: "integer" }, mode: { type: "string", enum: ["simple", "interest", "deeper"] }, text: { ...str, description: "Markdown. In 'interest' mode wrap changed sentences in ==\u2026==" } } } },
+        replace: { type: "boolean", description: "Replace existing questions on those passages" }
+      }
+    },
+    run: (a) => {
+      const sid = Number(a.source_id), lang = a.lang === "id" || a.lang === "en" ? a.lang : graph().prefs.lang;
+      const st2 = getStudy(sid, lang);
+      if (!st2) throw new Error(`No source ${a.source_id}.`);
+      const qs = Array.isArray(a.questions) ? a.questions : [];
+      if (a.replace) new Set(qs.map((q) => Number(q.chunk_id))).forEach((c) => deleteStudyItems(sid, c));
+      const added = addStudyItems(sid, lang, qs.map((q) => ({ chunkId: Number(q.chunk_id), conceptId: q.concept ? (() => {
+        try {
+          return find(graph(), q.concept).id;
+        } catch {
+          return null;
+        }
+      })() : null, question: String(q.question || ""), options: Array.isArray(q.options) ? q.options.map(String) : [], answer: Number(q.answer_index), why: q.why ? String(q.why) : null })), "claude");
+      let versions = 0;
+      for (const v of Array.isArray(a.versions) ? a.versions : []) {
+        if (!["simple", "interest", "deeper"].includes(v.mode) || !st2.passages.some((p) => p.chunkId === Number(v.chunk_id)) || !v.text) continue;
+        saveStudyAdapt(sid, Number(v.chunk_id), v.mode, lang, String(v.text), "claude");
+        versions++;
+      }
+      const left = getStudy(sid, lang).passages.filter((p) => !p.items.length).length;
+      return { saved: true, questions_added: added, versions_saved: versions, passages_without_question: left, note: "Open Neuron \u2192 Study to read it." };
+    }
+  },
+  {
+    name: "neuron_claims_get",
+    description: "Get a concept's claims (with reasons, quotes and check status) and the source passages they should be grounded in, so you can extract new claims or fact-check them. Without concept: a summary of claims by status and the concepts with unchecked or problem claims.",
+    inputSchema: { type: "object", properties: { concept: { ...str, description: "Concept id or label" } } },
+    annotations: { readOnlyHint: true },
+    run: (a) => {
+      if (!a.concept) {
+        const all = listClaims(), g3 = graph();
+        const by = (st2) => [...new Set(all.filter((x) => st2.includes(x.status)).map((x) => x.conceptId))].map((id) => ({ id, label: g3.concepts.find((c2) => c2.id === id)?.label.en || id }));
+        return {
+          counts: claimCounts(),
+          with_unchecked: by(["unchecked"]),
+          with_problems: by(["partly", "unsupported", "contradicted", "disputed"]),
+          without_claims: g3.concepts.filter((c2) => c2.sources.length > 0 && !all.some((x) => x.conceptId === c2.id)).map((c2) => ({ id: c2.id, label: c2.label.en }))
+        };
+      }
+      const g2 = graph(), c = find(g2, a.concept), { passages, notes } = conceptPassages(c.id);
+      return {
+        concept: { id: c.id, label: c.label.en, user_definition: c.userDef || null, summary: c.summary.en },
+        claims: listClaims({ concept: c.id }).map((x) => ({ ...claimBrief(x), by: x.by, chunk_id: x.chunkId })),
+        passages: passages.map((p) => ({ chunk_id: p.chunkId, source: p.title, page: p.page, text: p.text })),
+        notes,
+        glossary: g2.glossary,
+        how: "Claims: 2-5 standalone sentences from the passages only, each with 1-3 'because' reasons from the passage and one verbatim quote with its chunk_id. Check: supported (passage clearly says it), partly (overstates / drops a condition / a reason isn't there), unsupported (not in the passages), contradicted (passage, user definition or glossary say otherwise), disputed (grounded but conflicts with well-established knowledge; give evidence)."
+      };
+    }
+  },
+  {
+    name: "neuron_claims_save",
+    description: "Save claims for a concept, each with its reasons, a verbatim quote and the passage (chunk_id) it comes from. replace: true replaces earlier AI/Claude claims (the user's own are kept).",
+    inputSchema: {
+      type: "object",
+      required: ["concept", "claims"],
+      properties: {
+        concept: str,
+        replace: { type: "boolean" },
+        lang: { type: "string", enum: ["en", "id"] },
+        claims: { type: "array", items: { type: "object", required: ["text"], properties: { text: str, because: { type: "array", items: str, maxItems: 5 }, quote: str, chunk_id: { type: "integer" } } } }
+      }
+    },
+    run: (a) => {
+      const g2 = graph(), c = find(g2, a.concept);
+      const ids = addClaims(c.id, a.claims.map((x) => ({ text: String(x.text || ""), because: Array.isArray(x.because) ? x.because.map(String) : [], quote: x.quote ? String(x.quote) : null, chunkId: Number(x.chunk_id) || null })), "claude", a.lang || g2.prefs.lang, !!a.replace);
+      return { saved: ids.length, claim_ids: ids, note: "Now check them with neuron_claims_check. They show in Neuron \u2192 Claims and in the concept's Claims tab." };
+    }
+  },
+  {
+    name: "neuron_claims_check",
+    description: "Record fact-check results for claims: supported, partly, unsupported, contradicted or disputed, with a one-sentence note and optional evidence (a URL or a source title).",
+    inputSchema: { type: "object", required: ["results"], properties: { results: { type: "array", items: { type: "object", required: ["claim_id", "status", "note"], properties: { claim_id: { type: "integer" }, status: { type: "string", enum: ["supported", "partly", "unsupported", "contradicted", "disputed"] }, note: str, evidence: str } } } } },
+    run: (a) => {
+      let n = 0;
+      const missing = [];
+      for (const r of a.results) {
+        if (!getClaim(Number(r.claim_id))) {
+          missing.push(Number(r.claim_id));
+          continue;
+        }
+        setClaimCheck(Number(r.claim_id), r.status, r.note ? String(r.note) : null, "claude", r.evidence ? String(r.evidence) : null);
+        n++;
+      }
+      return { checked: n, ...missing.length ? { not_found: missing } : {}, counts: claimCounts() };
+    }
+  },
+  {
     name: "neuron_research_pack",
     description: "Gather everything the user's Neuron has on a topic, ready to write from: matching concepts with their definitions, summaries, sources and quotes, the links between them, relevant source passages, glossary terms and saved notes. Use it first when turning research into a blog post or essay.",
     inputSchema: { type: "object", properties: { topic: { ...str, description: "The topic or question" }, max_concepts: { type: "integer", minimum: 1, maximum: 15 } }, required: ["topic"] },
@@ -9464,7 +9748,8 @@ var TOOLS = [
           summary_id: c.summary.id,
           mastery: c.mastery,
           sources: c.sources.map((s) => ({ title: s.title, note: s.note || null, quote: s.quote || null, page: s.page || null })),
-          terms: c.vocab.map((v) => `${v.en} (${v.ind})`)
+          terms: c.vocab.map((v) => `${v.en} (${v.ind})`),
+          claims: listClaims({ concept: c.id }).map(claimBrief)
         })),
         links: g2.links.filter((l) => l.status === "approved" && ids.has(l.from) && ids.has(l.to)).map((l) => `${lab(l.from)} ${TYPES[l.type].say.en} ${lab(l.to)}`),
         passages: r.passages.map((p) => ({ source: p.sourceTitle, page: p.page, text: (p.text || "").slice(0, 900) })),
@@ -9621,6 +9906,20 @@ Run a Neuron lesson: call neuron_lesson_start with this goal and follow its step
     description: "Pick up the last unfinished lesson where it stopped.",
     arguments: [{ name: "lesson_id", description: "Optional: which lesson" }],
     text: (a) => `Continue my Neuron lesson${a.lesson_id ? ` #${a.lesson_id}` : ""}: call neuron_lesson_get${a.lesson_id ? "" : " (no id, to list them) and pick the most recent unfinished one"}, briefly recap where I am, then teach the next step the same way.`
+  },
+  {
+    name: "study_source",
+    title: "Prepare a source for study",
+    description: "Write a question after each passage of a source (and simpler / interest / deeper versions if you like) for Neuron's Study reader.",
+    arguments: [{ name: "source", description: "Source title or id", required: true }, { name: "versions", description: "Optional: simple, interest, deeper (comma separated)" }],
+    text: (a) => `Prepare my Neuron source "${a.source || "(ask me which)"}" for study: call neuron_study_get, write one understanding question per passage (answerable from that passage alone)${a.versions ? `, and these versions of each passage: ${a.versions}` : ""}, then save them with neuron_study_save, in batches for long sources. Tell me when it's ready in Neuron \u2192 Study.`
+  },
+  {
+    name: "fact_check",
+    title: "Fact-check my map",
+    description: "Find the key claims in a concept's sources and check each one against its passage, your definitions and (if Claude can search) the wider evidence.",
+    arguments: [{ name: "concept", description: "Optional: a concept; leave empty for the unchecked ones" }],
+    text: (a) => `Fact-check ${a.concept ? `my Neuron concept "${a.concept}"` : "the unchecked claims on my Neuron map"}: call neuron_claims_get${a.concept ? "" : " (no concept) to see what needs work, then for each concept"}, add missing claims from the source passages with neuron_claims_save, and record a verdict for each with neuron_claims_check. Tell me what's contradicted, unsupported or disputed, and why.`
   },
   {
     name: "blog_post",

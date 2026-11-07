@@ -2,11 +2,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, Bil, useGraph } from "./store";
+import ClaimsTab from "./Claims";
 import { ConfButtons, domainColor, Dot, fmtRel, LinkSentence, Meter, NodeBtn, useBusy, useSelect } from "./ui";
 import { chainBack, chainFwd, due, level, LEVEL_NAME, neighbors, TYPES, VERDICT } from "@/lib/logic";
 import type { Bi, Concept, Confidence, Graph, LinkType, SourceRef } from "@/lib/types";
 
-export type Tab = "overview" | "words" | "test" | "discuss" | "path";
+export type Tab = "overview" | "claims" | "words" | "test" | "discuss" | "path";
 
 export default function ConceptPanel({ c, tab, setTab }: { c: Concept; tab: Tab; setTab: (t: Tab) => void }) {
   const { graph, T, t } = useGraph();
@@ -15,7 +16,7 @@ export default function ConceptPanel({ c, tab, setTab }: { c: Concept; tab: Tab;
   const dom = (k: string) => graph!.domains.find((d) => d.key === k);
   const tabs: [Tab, string][] = [
     ["overview", t("Overview", "Ringkasan") + (sugg.length ? ` (${sugg.length} ${t("new", "baru")})` : "")],
-    ["words", t("Words", "Istilah")], ["test", t("Test", "Tes")], ["discuss", t("Discuss", "Diskusi")], ["path", t("Path", "Urutan")],
+    ["claims", t("Claims", "Klaim")], ["words", t("Words", "Istilah")], ["test", t("Test", "Tes")], ["discuss", t("Discuss", "Diskusi")], ["path", t("Path", "Urutan")],
   ];
   return (
     <>
@@ -31,6 +32,7 @@ export default function ConceptPanel({ c, tab, setTab }: { c: Concept; tab: Tab;
       </div>
       <div key={c.id + tab}>
         {tab === "overview" && <Overview c={c} />}
+        {tab === "claims" && <ClaimsTab c={c} />}
         {tab === "words" && <Words c={c} />}
         {tab === "test" && <TestTab c={c} />}
         {tab === "discuss" && <Discuss c={c} />}

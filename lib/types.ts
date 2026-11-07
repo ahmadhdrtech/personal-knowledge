@@ -155,3 +155,18 @@ export type LessonStep = {
   predict?: string; prediction?: string; explanation?: string; check?: LessonCheck; result?: LessonResult;
 };
 export type Lesson = { id: number; goal: string; status: "probing" | "active" | "done"; startSummary: string | null; probe: ProbeItem[]; steps: LessonStep[]; current: number; summary: string | null; next: string[]; lang: string | null; createdAt: number; updatedAt: number };
+
+/* ---------- Study a source ---------- */
+export type StudyMode = "original" | "simple" | "interest" | "deeper";
+export type StudyItem = { id: number; chunkId: number; conceptId: string | null; question: string; options: string[]; answer: number; why: string | null; by: "app" | "claude"; choice: number | null; correct: boolean | null; confidence: Confidence | null; answeredAt: number | null };
+export type StudyPassage = { chunkId: number; idx: number; page: number | null; text: string; concepts: string[]; items: StudyItem[]; adapted: Partial<Record<Exclude<StudyMode, "original">, string>> };
+export type Study = { source: { id: number; title: string; url: string | null }; lang: "en" | "id"; passages: StudyPassage[]; pos: number };
+
+/* ---------- claims and fact-checking ---------- */
+export type ClaimStatus = "unchecked" | "supported" | "partly" | "unsupported" | "contradicted" | "disputed";
+export type Claim = {
+  id: number; conceptId: string; text: string; because: string[];
+  sourceId: number | null; sourceTitle: string | null; chunkId: number | null; page: number | null; quote: string | null;
+  status: ClaimStatus; note: string | null; evidence: string | null; checkedBy: "ai" | "claude" | "you" | null; checkedAt: number | null;
+  by: "ai" | "claude" | "you"; createdAt: number; updatedAt: number;
+};

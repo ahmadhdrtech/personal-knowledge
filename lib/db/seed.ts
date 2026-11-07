@@ -7,7 +7,7 @@ type AnyDB = BetterSQLite3Database<typeof schema> & { $client: Database.Database
 
 const GRAPH_TABLES = [
   "domains", "concepts", "concept_domains", "sources", "chunks", "concept_sources",
-  "links", "vocab", "questions", "attempts", "glossary", "chats", "review_cards", "embeddings",
+  "links", "vocab", "questions", "attempts", "glossary", "chats", "review_cards", "embeddings", "study_items", "study_adapt", "claims",
 ];
 
 /** Empty the knowledge map so you can start with your own topics. AI settings, keys and usage history are kept. */

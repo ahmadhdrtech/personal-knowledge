@@ -50,7 +50,7 @@ function Svg({ code }: { code: string }) {
 
 /* inline: math first, then code, links, images, bold, italic */
 function inline(s: string, k: string): React.ReactNode[] {
-  const re = /(\$\$[^$]+\$\$|\\\((.+?)\\\)|\$(?=\S)([^$\n]+?)(?<=\S)\$(?!\d)|`[^`]+`|!\[[^\]]*\]\([^)\s]+\)|\[[^\]]+\]\([^)\s]+\)|\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g;
+  const re = /(\$\$[^$]+\$\$|\\\((.+?)\\\)|\$(?=\S)([^$\n]+?)(?<=\S)\$(?!\d)|`[^`]+`|!\[[^\]]*\]\([^)\s]+\)|\[[^\]]+\]\([^)\s]+\)|==[^=\n]+==|\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g;
   const out: React.ReactNode[] = [];
   let last = 0, m: RegExpExecArray | null, i = 0;
   while ((m = re.exec(s))) {
@@ -66,7 +66,8 @@ function inline(s: string, k: string): React.ReactNode[] {
     } else if (p.startsWith("[")) {
       const mm = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(p)!;
       out.push(okUrl(mm[2]) ? <a key={k + i++} className="link" href={mm[2]} target="_blank" rel="noreferrer">{mm[1]}</a> : <Fragment key={k + i++}>{mm[1]}</Fragment>);
-    } else if (p.startsWith("**")) out.push(<strong key={k + i++}>{inline(p.slice(2, -2), k + i + "b")}</strong>);
+    } else if (p.startsWith("==")) out.push(<mark key={k + i++} className="md-mark">{inline(p.slice(2, -2), k + i + "m")}</mark>);
+    else if (p.startsWith("**")) out.push(<strong key={k + i++}>{inline(p.slice(2, -2), k + i + "b")}</strong>);
     else out.push(<em key={k + i++}>{p.slice(1, -1)}</em>);
     last = m.index + p.length;
   }

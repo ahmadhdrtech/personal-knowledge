@@ -8,7 +8,7 @@ import { bestChunk, chunkText } from "./extract";
 import { reviewInfo, scheduleReview, rateMcq, rateEssay } from "./review";
 import type {
   Bi, Calibration, Concept, Confidence, Depth, Domain, Graph, GlossaryItem, ImportReport, Link, LinkType,
-  McqQuestion, Prefs, SourceRow, Writing, Profile, PostFields, Lesson, LessonStep, ProbeItem, LessonResult,
+  McqQuestion, Prefs, SourceRow, Writing, Profile, PostFields, Lesson, LessonStep, ProbeItem, LessonResult, Study, StudyItem, StudyMode, StudyPassage, Claim, ClaimStatus,
 } from "./types";
 
 const db = () => getDb();
@@ -265,6 +265,8 @@ export function getChunk(id: number) {
 }
 export function deleteSource(id: number) {
   const d = db();
+  d.$client.prepare("DELETE FROM study_items WHERE source_id = ?").run(id);
+  d.$client.prepare("DELETE FROM study_adapt WHERE source_id = ?").run(id);
   d.delete(S.conceptSources).where(eq(S.conceptSources.sourceId, id)).run();
   d.delete(S.chunks).where(eq(S.chunks.sourceId, id)).run();
   d.delete(S.sources).where(eq(S.sources.id, id)).run();
@@ -524,4 +526,133 @@ export function answerLessonCheck(id: number, idx: number, r: Omit<LessonResult,
   if (r.correct && l.current === idx && idx < l.steps.length - 1) l.current = idx + 1;
   saveLesson(l);
   return { lesson: getLesson(id)!, mastery };
+}
+
+/* ---------------- study a source ---------------- */
+type StudyRow = { id: number; source_id: number; chunk_id: number; concept_id: string | null; lang: string | null; question: string; options_json: string; answer: number; why: string | null; by: string; choice: number | null; correct: number | null; confidence: string | null; answered_at: number | null; created_at: number };
+const toItem = (r: StudyRow): StudyItem => ({ id: r.id, chunkId: r.chunk_id, conceptId: r.concept_id, question: r.question, options: pj<string[]>(r.options_json, []), answer: r.answer, why: r.why, by: r.by === "claude" ? "claude" : "app", choice: r.choice, correct: r.correct == null ? null : !!r.correct, confidence: (r.confidence as Confidence) || null, answeredAt: r.answered_at });
+export function getStudy(sourceId: number, lang: "en" | "id"): Study | null {
+  const src = getSource(sourceId); if (!src) return null;
+  const c = db().$client;
+  const chunks = c.prepare("SELECT id, idx, page, text FROM chunks WHERE source_id = ? ORDER BY idx").all(sourceId) as { id: number; idx: number; page: number | null; text: string }[];
+  const cites = c.prepare("SELECT chunk_id AS ch, concept_id AS co FROM concept_sources WHERE source_id = ? AND chunk_id IS NOT NULL").all(sourceId) as { ch: number; co: string }[];
+  const items = (c.prepare("SELECT * FROM study_items WHERE source_id = ? AND (lang = ? OR lang IS NULL) ORDER BY id").all(sourceId, lang) as StudyRow[]).map(toItem);
+  const adapts = c.prepare("SELECT chunk_id AS ch, mode, text FROM study_adapt WHERE source_id = ? AND lang = ?").all(sourceId, lang) as { ch: number; mode: string; text: string }[];
+  const passages: StudyPassage[] = chunks.map((k) => ({
+    chunkId: k.id, idx: k.idx, page: k.page, text: k.text,
+    concepts: [...new Set(cites.filter((x) => x.ch === k.id).map((x) => x.co))],
+    items: items.filter((i) => i.chunkId === k.id),
+    adapted: Object.fromEntries(adapts.filter((a) => a.ch === k.id).map((a) => [a.mode, a.text])),
+  }));
+  const pos = getSetting<Record<string, number>>("study_pos", {})[String(sourceId)] ?? 0;
+  return { source: { id: src.id, title: src.title, url: src.urlOrPath && /^https?:/.test(src.urlOrPath) ? src.urlOrPath : null }, lang, passages, pos };
+}
+export function addStudyItems(sourceId: number, lang: string | null, items: { chunkId: number; conceptId?: string | null; question: string; options: string[]; answer: number; why?: string | null }[], by: "app" | "claude") {
+  const c = db().$client, t = now();
+  const okChunk = new Set((c.prepare("SELECT id FROM chunks WHERE source_id = ?").all(sourceId) as { id: number }[]).map((x) => x.id));
+  const okConcept = new Set(db().select({ id: S.concepts.id }).from(S.concepts).all().map((x) => x.id));
+  const ins = c.prepare("INSERT INTO study_items (source_id, chunk_id, concept_id, lang, question, options_json, answer, why, by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+  // a question about a passage that cites exactly one concept is about that concept
+  const cites = c.prepare("SELECT chunk_id AS ch, concept_id AS co FROM concept_sources WHERE source_id = ? AND chunk_id IS NOT NULL").all(sourceId) as { ch: number; co: string }[];
+  const only = (ch: number) => { const cs = [...new Set(cites.filter((x) => x.ch === ch).map((x) => x.co))]; return cs.length === 1 ? cs[0] : null; };
+  let n = 0;
+  for (const it of items) {
+    if (!okChunk.has(it.chunkId) || !it.question || !Array.isArray(it.options) || it.options.length < 2 || !(it.answer >= 0 && it.answer < it.options.length)) continue;
+    ins.run(sourceId, it.chunkId, it.conceptId && okConcept.has(it.conceptId) ? it.conceptId : only(it.chunkId), lang, it.question.slice(0, 600), JSON.stringify(it.options.map((o) => String(o).slice(0, 300))), it.answer, it.why ? String(it.why).slice(0, 800) : null, by, t);
+    n++;
+  }
+  return n;
+}
+export function saveStudyAdapt(sourceId: number, chunkId: number, mode: Exclude<StudyMode, "original">, lang: string, text: string, by: "app" | "claude") {
+  db().$client.prepare("INSERT OR REPLACE INTO study_adapt (chunk_id, mode, lang, source_id, text, by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(chunkId, mode, lang, sourceId, text.slice(0, 6000), by, now());
+}
+/** Answer a question placed in the reader: marks it and, when it is about a concept on the map, updates mastery and review. */
+export function answerStudyItem(id: number, choice: number, confidence: Confidence) {
+  const c = db().$client;
+  const r = c.prepare("SELECT * FROM study_items WHERE id = ?").get(id) as StudyRow | undefined;
+  if (!r) throw new Error("Question not found");
+  const correct = choice === r.answer;
+  c.prepare("UPDATE study_items SET choice = ?, correct = ?, confidence = ?, answered_at = ? WHERE id = ?").run(choice, correct ? 1 : 0, confidence, now(), id);
+  let mastery: ReturnType<typeof recordExternal> | null = null;
+  if (r.concept_id && db().select().from(S.concepts).where(eq(S.concepts.id, r.concept_id)).get()) {
+    const src = getSource(r.source_id);
+    mastery = recordExternal(r.concept_id, { kind: "quiz", correct, confidence, note: `Study: ${src?.title || "source"} · ${r.question}`.slice(0, 300) });
+  }
+  return { correct, mastery };
+}
+export function resetStudy(sourceId: number) {
+  db().$client.prepare("UPDATE study_items SET choice = NULL, correct = NULL, confidence = NULL, answered_at = NULL WHERE source_id = ?").run(sourceId);
+  setStudyPos(sourceId, 0);
+}
+export function deleteStudyItems(sourceId: number, chunkId?: number) {
+  if (chunkId) db().$client.prepare("DELETE FROM study_items WHERE source_id = ? AND chunk_id = ?").run(sourceId, chunkId);
+  else db().$client.prepare("DELETE FROM study_items WHERE source_id = ?").run(sourceId);
+}
+export function setStudyPos(sourceId: number, pos: number) {
+  const m = getSetting<Record<string, number>>("study_pos", {}); m[String(sourceId)] = Math.max(0, Math.round(pos)); setSetting("study_pos", m);
+}
+export function studySummaries(): Record<number, { questions: number; answered: number; right: number }> {
+  const rows = db().$client.prepare("SELECT source_id AS s, COUNT(*) AS q, SUM(CASE WHEN answered_at IS NOT NULL THEN 1 ELSE 0 END) AS a, SUM(CASE WHEN correct = 1 THEN 1 ELSE 0 END) AS r FROM study_items GROUP BY source_id").all() as { s: number; q: number; a: number; r: number }[];
+  return Object.fromEntries(rows.map((x) => [x.s, { questions: x.q, answered: x.a || 0, right: x.r || 0 }]));
+}
+
+/* ---------------- claims and fact-checking ---------------- */
+export const CLAIM_STATUSES: ClaimStatus[] = ["unchecked", "supported", "partly", "unsupported", "contradicted", "disputed"];
+type ClaimRow = { id: number; concept_id: string; text: string; because_json: string; source_id: number | null; chunk_id: number | null; quote: string | null; status: string; note: string | null; evidence: string | null; checked_by: string | null; checked_at: number | null; by: string; created_at: number; updated_at: number; title?: string | null; page?: number | null };
+const toClaim = (r: ClaimRow): Claim => ({
+  id: r.id, conceptId: r.concept_id, text: r.text, because: pj<string[]>(r.because_json, []),
+  sourceId: r.source_id, sourceTitle: r.title ?? null, chunkId: r.chunk_id, page: r.page ?? null, quote: r.quote,
+  status: (CLAIM_STATUSES.includes(r.status as ClaimStatus) ? r.status : "unchecked") as ClaimStatus, note: r.note, evidence: r.evidence,
+  checkedBy: (r.checked_by as Claim["checkedBy"]) || null, checkedAt: r.checked_at, by: (r.by as Claim["by"]) || "ai", createdAt: r.created_at, updatedAt: r.updated_at,
+});
+const CLAIM_SELECT = "SELECT c.*, s.title AS title, k.page AS page FROM claims c LEFT JOIN sources s ON s.id = c.source_id LEFT JOIN chunks k ON k.id = c.chunk_id";
+export function listClaims(opts: { concept?: string; status?: ClaimStatus } = {}): Claim[] {
+  const where: string[] = [], args: unknown[] = [];
+  if (opts.concept) { where.push("c.concept_id = ?"); args.push(opts.concept); }
+  if (opts.status) { where.push("c.status = ?"); args.push(opts.status); }
+  return (db().$client.prepare(`${CLAIM_SELECT}${where.length ? " WHERE " + where.join(" AND ") : ""} ORDER BY c.concept_id, c.position, c.id`).all(...args) as ClaimRow[]).map(toClaim);
+}
+export function getClaim(id: number): Claim | null { const r = db().$client.prepare(`${CLAIM_SELECT} WHERE c.id = ?`).get(id) as ClaimRow | undefined; return r ? toClaim(r) : null; }
+/** The passages a concept was extracted from (what its claims should be grounded in). */
+export function conceptPassages(conceptId: string) {
+  const c = db().$client;
+  const rows = c.prepare("SELECT DISTINCT k.id AS chunkId, k.source_id AS sourceId, s.title AS title, k.page AS page, k.text AS text FROM concept_sources cs JOIN chunks k ON k.id = cs.chunk_id JOIN sources s ON s.id = k.source_id WHERE cs.concept_id = ? ORDER BY k.source_id, k.idx").all(conceptId) as { chunkId: number; sourceId: number; title: string; page: number | null; text: string }[];
+  const notes = c.prepare("SELECT s.id AS sourceId, s.title AS title, cs.note AS note, cs.quote AS quote FROM concept_sources cs JOIN sources s ON s.id = cs.source_id WHERE cs.concept_id = ? AND cs.chunk_id IS NULL").all(conceptId) as { sourceId: number; title: string; note: string; quote: string | null }[];
+  return { passages: rows, notes };
+}
+export function addClaims(conceptId: string, items: { text: string; because?: string[]; quote?: string | null; chunkId?: number | null; sourceId?: number | null }[], by: Claim["by"], lang: string | null, replace = false) {
+  const c = db().$client, t = now();
+  if (!db().select().from(S.concepts).where(eq(S.concepts.id, conceptId)).get()) throw new Error(`No concept ${conceptId}`);
+  if (replace) c.prepare("DELETE FROM claims WHERE concept_id = ? AND by != 'you'").run(conceptId);
+  const chunkSrc = (id: number) => (c.prepare("SELECT source_id AS s FROM chunks WHERE id = ?").get(id) as { s: number } | undefined)?.s ?? null;
+  let pos = (c.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS n FROM claims WHERE concept_id = ?").get(conceptId) as { n: number }).n;
+  const ins = c.prepare("INSERT INTO claims (concept_id, text, because_json, source_id, chunk_id, quote, by, lang, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+  const ids: number[] = [];
+  for (const it of items) {
+    const text = String(it.text || "").trim(); if (!text) continue;
+    const chunk = it.chunkId && chunkSrc(Number(it.chunkId)) != null ? Number(it.chunkId) : null;
+    const src = chunk ? chunkSrc(chunk) : it.sourceId ?? null;
+    ids.push(Number(ins.run(conceptId, text.slice(0, 500), JSON.stringify((it.because || []).map((b) => String(b).trim()).filter(Boolean).slice(0, 5).map((b) => b.slice(0, 400))), src, chunk, it.quote ? String(it.quote).slice(0, 600) : null, by, lang, pos++, t, t).lastInsertRowid));
+  }
+  return ids;
+}
+export function updateClaim(id: number, p: { text?: string; because?: string[] }) {
+  const cur = getClaim(id); if (!cur) throw new Error("Claim not found");
+  const text = p.text != null ? String(p.text).trim().slice(0, 500) : cur.text;
+  const because = p.because ? p.because.map((b) => String(b).trim()).filter(Boolean).slice(0, 5) : cur.because;
+  // an edited claim has to be checked again
+  const changed = text !== cur.text || JSON.stringify(because) !== JSON.stringify(cur.because);
+  db().$client.prepare(`UPDATE claims SET text = ?, because_json = ?, ${changed ? "status = 'unchecked', note = NULL, checked_by = NULL, checked_at = NULL," : ""} updated_at = ? WHERE id = ?`).run(text, JSON.stringify(because), now(), id);
+}
+export function setClaimCheck(id: number, status: ClaimStatus, note: string | null, by: "ai" | "claude" | "you", evidence?: string | null) {
+  if (!CLAIM_STATUSES.includes(status)) throw new Error(`status must be one of ${CLAIM_STATUSES.join(", ")}`);
+  db().$client.prepare("UPDATE claims SET status = ?, note = ?, evidence = COALESCE(?, evidence), checked_by = ?, checked_at = ?, updated_at = ? WHERE id = ?").run(status, note ? String(note).slice(0, 800) : null, evidence ? String(evidence).slice(0, 500) : null, status === "unchecked" ? null : by, status === "unchecked" ? null : now(), now(), id);
+}
+export function deleteClaim(id: number) { db().$client.prepare("DELETE FROM claims WHERE id = ?").run(id); }
+export function claimCounts(): { total: number; byStatus: Record<ClaimStatus, number>; concepts: number } {
+  const rows = db().$client.prepare("SELECT status, COUNT(*) AS n FROM claims GROUP BY status").all() as { status: ClaimStatus; n: number }[];
+  const byStatus = Object.fromEntries(CLAIM_STATUSES.map((s) => [s, 0])) as Record<ClaimStatus, number>;
+  rows.forEach((r) => { if (r.status in byStatus) byStatus[r.status] = r.n; });
+  const concepts = (db().$client.prepare("SELECT COUNT(DISTINCT concept_id) AS n FROM claims").get() as { n: number }).n;
+  return { total: rows.reduce((s, r) => s + r.n, 0), byStatus, concepts };
 }

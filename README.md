@@ -22,19 +22,29 @@ Explanations use whatever makes the idea clearest: equations, flowcharts, tables
 
 ![A lesson step with an equation, a flowchart and a table](docs/screenshots/lesson.png)
 
-**4. Remember it with spaced review.** Each answer (with how sure you were) updates your mastery and schedules the next review. Confident wrong answers are flagged as misconceptions and come back first.
+**4. Or study a source directly.** **Study** turns any source into an active reader: a question after each passage, and buttons to switch a passage to a simpler version, one with examples from your interests (changed sentences highlighted), or a deeper one. Your answers update mastery, and the end shows **Glows** (what you did well) and **Grows** (what to re-read, with a ready "Teach me" prompt). Questions and versions can be written by the app's AI, or for free by Claude Desktop ("Prepare my source … for study").
+
+![Study: a passage rewritten with the learner's interests, and its question](docs/screenshots/study.png)
+
+**5. Remember it with spaced review.** Each answer (with how sure you were) updates your mastery and schedules the next review. Confident wrong answers are flagged as misconceptions and come back first.
 
 ![Spaced review](docs/screenshots/review.png)
 
-**5. See the big picture.** **Views** answers different questions about your map. Priority shows which weak concepts hold the most together; there are also progress over time, a learning flow, a mind map, a domain matrix, a sunburst and a neighborhood view.
+**6. See the big picture.** **Views** answers different questions about your map. Priority shows which weak concepts hold the most together; there are also progress over time, a learning flow, a mind map, a domain matrix, a sunburst and a neighborhood view.
 
 ![Priority view: mastery against connections](docs/screenshots/views-priority.png)
 
-**6. Turn your research into writing.** Before Claude writes anything, it asks you a short brief based on the rhetorical situation: who is speaking, the audience, genre, purpose, stance, context and culture. Blog posts come with the fields your platform needs (title, slug, summary, tags) and a .md download. Notes from your discussions are saved here too.
+**7. Turn your research into writing.** Before Claude writes anything, it asks you a short brief based on the rhetorical situation: who is speaking, the audience, genre, purpose, stance, context and culture. Blog posts come with the fields your platform needs (title, slug, summary, tags) and a .md download. Notes from your discussions are saved here too.
 
 ![Writing: a blog post with its fields and brief](docs/screenshots/writing.png)
 
-**7. Use it from Claude Desktop.** Neuron includes an MCP server. Claude can read and search your map, quiz you and record results, teach lessons, add sources and save writing, using your Claude subscription instead of API credit.
+**8. Check what your sources really say.** Each concept can hold its key **claims**, each with the reasons ("because …") and the sentence it comes from. A fact-check compares every claim with its passage, your own definitions and your glossary, and marks it supported, partly, not in source, contradicted or disputed. Lessons, blog posts and Claude use the supported claims as ground truth. **Claims** lists them all, with bulk checking.
+
+![Claims with their reasons, quotes and check results](docs/screenshots/claims.png)
+
+**9. Take your notes anywhere.** Settings → **Export as Markdown notes** downloads your whole map as linked notes: one per concept (summary, your definition, claims, `[[connections]]`, terms, sources, practice questions), topic, source, lesson and piece of writing. Open the folder in Obsidian or any Markdown editor.
+
+**10. Use it from Claude Desktop.** Neuron includes an MCP server. Claude can read and search your map, quiz you and record results, teach lessons, add sources and save writing, using your Claude subscription instead of API credit.
 
 ![Connecting Claude Desktop](docs/screenshots/claude-desktop.png)
 
@@ -85,14 +95,16 @@ Pick the current depth in the sidebar.
 | **Guide** | Plain-language docs for Models (provider vs. key vs. model vs. depth, every box explained, costs, fixes) plus guided tours of Models and of the whole app |
 | **Map** | The graph plus a right-hand column: the **Assistant** (chat over the whole map; `@` to mention a concept, `/` for commands such as `/open`, `/find`, `/filter`, `/review`) and the concept panel (Overview, Words, Test, Discuss, Path). “Hide panel” gives the graph full width |
 | **Lessons** | “Teach me” lessons run by Claude Desktop: what you already knew (the probe), the step plan to your goal, and every step with its prediction, explanation (Markdown with Mermaid flowcharts, KaTeX equations, SVG figures, tables) and check. Answer checks here; results update mastery and review |
+| **Study** | Read a source passage by passage with a question after each one; switch passages to simpler, interest-based or deeper versions; Glows & Grows feedback at the end |
 | **Views** | Seven other ways to read the map: Progress (mastery over time, answers per day, most improved, slipping), Priority, Learning flow (copy as Mermaid), Mind map (from part of / example of), Domain matrix, Sunburst, Neighborhood |
 | **Dashboard** | Mastery, confidence check, mastery by domain, domain overlaps, cross-domain links, recent answers |
 | **Review** | Spaced review (FSRS): what's due now, what's coming in the next 14 days, misconceptions first |
 | **Sources** | Paste text, upload PDF / Word / .txt / .md / subtitles, or import a web page. Long documents are read in parts; each concept quotes and links to its passage |
+| **Claims** | The key claims under each concept with their reasons and quotes, fact-checked against the source, your definitions and glossary; filter by status and check in bulk |
 | **Glossary** | Terms you taught the AI, plus your own concept definitions |
 | **Writing** | Pieces Claude Desktop wrote with you (with their rhetorical brief) and notes saved from your discussions. Blog posts get a panel with each field of your blog's admin form (title, slug, summary, body, tags, cover) and a copy button; plus the writing guide: the questions Claude asks before writing and 21 writing techniques |
 | **Models** | Which model does what, all your models, providers and keys |
-| **Claude Desktop** | Connect the Claude desktop app through MCP: copy-paste config with your paths, a test button, the tools Claude gets and six ready-made prompts (Teach me, Continue a lesson, Write with Neuron, Blog post from my research, Save this discussion, Read a text critically) |
+| **Claude Desktop** | Connect the Claude desktop app through MCP: copy-paste config with your paths, a test button, the tools Claude gets and eight ready-made prompts (Teach me, Continue a lesson, Prepare a source for study, Fact-check my map, Write with Neuron, Blog post from my research, Save this discussion, Read a text critically) |
 | **Usage** | Every AI call: cost, tokens, speed, by day, model and feature; monthly budget with optional hard stop |
 | **Settings** | About you (name, background, interests: every AI prompt uses them for examples), Your blog (name, address, readers, voice, format rules for the research-to-post flow), language, map view, AI depth, theme, backups, export, empty map or reset to demo |
 
@@ -146,5 +158,8 @@ data/neuron.db       your data (git-ignored)
 ## Roadmap
 
 - **Phase 3** (done): file and web import with passage citations, FSRS review, backups, and embeddings (Models → Search index) for search by meaning, smarter merging and grounded Assistant answers. Vectors are stored in SQLite and compared in plain JavaScript, fast enough for thousands of items.
-- **Phase 4** (done): MCP server for Claude Desktop (`mcp/server.ts`, 21 tools and 6 prompts, no extra packages), with a rhetorical-situation writing brief and saved discussion notes, Progress and Mind map views. 
-- **Phase 5** (done): “Teach me” lessons (probe → plan → predict, explain, check), rich lesson content (Mermaid, KaTeX, SVG, tables). Next: an in-app reader for sources with questions placed inside the text, and claims with reasons stored under each concept.
+- **Phase 4** (done): MCP server for Claude Desktop (`mcp/server.ts`, 26 tools and 8 prompts, no extra packages), with a rhetorical-situation writing brief and saved discussion notes, Progress and Mind map views. 
+- **Phase 5** (done): “Teach me” lessons (probe → plan → predict, explain, check), rich lesson content (Mermaid, KaTeX, SVG, tables). 
+- **Phase 6** (done): Study a source: questions inside the reader, simpler / interest / deeper versions, Glows & Grows feedback.
+- **Phase 7** (done): claims with reasons and quotes under each concept, fact-checking (in-app AI or Claude Desktop), and a Markdown (Obsidian) export.
+- Ideas: import an Obsidian folder, export to Anki, a better phone layout.

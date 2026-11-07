@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import Page from "@/components/Page";
 import { api, useGraph } from "@/components/store";
@@ -37,6 +38,7 @@ export default function SourcesPage() {
               <td className="num">{s.chunks || "–"}</td>
               <td className="muted" style={{ whiteSpace: "nowrap" }}>{fmtDate(s.createdAt, lang)}</td>
               <td><div className="inline">
+                {s.chunks > 0 && <Link className="btn small primary" href={`/study?source=${s.id}`}>{t("Study", "Pelajari")}</Link>}
                 {s.words > 0 && <button className="btn small" onClick={async () => setView(await api(`/api/sources?id=${s.id}`))}>{t("Read", "Baca")}</button>}
                 <button className="btn small" onClick={() => del(s.id)}>{armed === s.id ? t("Click again to remove", "Klik lagi untuk menghapus") : t("Remove", "Hapus")}</button>
               </div></td>

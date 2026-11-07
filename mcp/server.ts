@@ -4,12 +4,13 @@
 import * as R from "../lib/repo";
 import { due, upcoming, TYPES, LINK_TYPES, chainBack, level } from "../lib/logic";
 import { TEACH_STEPS, FORMAT_GUIDE } from "../lib/lesson-guide";
+import { STUDY_MODES } from "../lib/ai/prompts";
 import { indexAfterImport, search } from "../lib/search";
-import type { Concept, Confidence, Graph, LinkType, Writing, Lesson, LessonStep, ProbeItem } from "../lib/types";
+import type { Concept, Confidence, Graph, LinkType, Writing, Lesson, LessonStep, ProbeItem, Claim, ClaimStatus } from "../lib/types";
 import { BRIEF, GROUPS, TECHNIQUES, KINDS, WORKFLOW, BLOG_STEPS, blogPreset } from "../lib/writing-guide";
 import { PLATFORMS, formatRules } from "../lib/blog";
 
-const SERVER = { name: "neuron", version: "0.7.0" };
+const SERVER = { name: "neuron", version: "0.9.0" };
 const SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const INSTRUCTIONS = `Neuron is the user's personal knowledge map: concepts from what they read, linked across topics, with mastery scores, spaced review and a glossary. The user is Indonesian and learns in English and Indonesian; reply in the language they use. neuron_overview tells you who they are (name, background, interests): take your examples from their interests.
@@ -20,6 +21,8 @@ const INSTRUCTIONS = `Neuron is the user's personal knowledge map: concepts from
 - Links you create are suggestions; the user approves them in the app. Ask before changing definitions.
 - To write anything for the user (essay, post, script, email, report...): call neuron_writing_guide first and ask its rhetorical-situation brief (who is speaking, audience, genre, purpose, stance, context, culture, then optional craft questions), each with how-to-answer guidance and examples. Don't write before the core answers are in unless the user says so. Then offer neuron_save_writing.
 - When the user wants to learn or understand something ("teach me", "I want to understand…", "explain … so I really get it"): run a lesson. Call neuron_lesson_start and follow its steps: probe what they know, plan, then teach one step at a time with a prediction, a clear explanation (mermaid flowcharts, LaTeX equations, svg figures, tables where they help) and a check. Save every step with neuron_lesson_step so the lesson appears in the app.
+- To prepare a source for the Study reader ("prepare … for study"): call neuron_study_get, write one understanding question per passage grounded only in that passage, plus the simpler / interest / deeper versions if asked, and save them with neuron_study_save.
+- Claims: each concept can hold its key claims with reasons, quotes and a check status. Treat supported claims as ground truth; don't build on contradicted, unsupported or disputed ones without saying so. To fact-check ("fact-check …", "is this right?"): neuron_claims_get, then neuron_claims_save (new claims from the passages) and neuron_claims_check. If you can search the web, use it only to mark claims disputed or supported beyond the source, and give the link as evidence.
 - To turn their research into a blog post: follow the steps from neuron_writing_guide with preset 'blog' (start with neuron_research_pack). Their Settings prefill most of the brief; confirm it with them instead of asking everything again.
 - When the user asks to save, input or keep the result of a discussion: draft a note (summary, key points, their conclusions, open questions, next steps, concepts), show it, and call neuron_save_discussion after they approve. Keep what the user said apart from what you suggested. Then offer to save their definitions, new terms or new concepts with the other tools.`;
 
@@ -37,6 +40,7 @@ const dname = (g: Graph, k: string) => g.domains.find((d) => d.key === k)?.name.
 const brief = (g: Graph, c: Concept) => ({ id: c.id, label_en: c.label.en, label_id: c.label.id, domains: c.domains.map((k) => dname(g, k)), mastery: c.mastery, misconception: c.miscon, due_for_review: c.miscon || (c.review ? c.review.due <= Date.now() : c.mastery < 60) });
 const iso = (t: number | null | undefined) => (t ? new Date(t).toISOString() : null);
 const CONF = ["guess", "fair", "sure"];
+const claimBrief = (c: Claim) => ({ id: c.id, claim: c.text, because: c.because, status: c.status, note: c.note, quote: c.quote, source: c.sourceTitle });
 function conceptIds(list: unknown) {
   const g = graph(), ids: string[] = [], unknown: string[] = [];
   for (const x of Array.isArray(list) ? list : []) { try { ids.push(find(g, x).id); } catch { unknown.push(String(x)); } }
@@ -89,6 +93,7 @@ const TOOLS: Tool[] = [
         review: c.review ? { next: iso(c.review.due), reviews: c.review.reps, forgotten: c.review.lapses, memory_strength_days: c.review.stability } : null,
         questions: c.quiz.map((q) => ({ question: q.q.en, question_id: q.q.id, options: q.o.map((o) => o.en), answer_index: q.a, why: q.why.en })),
         glossary: g.glossary,
+        claims: R.listClaims({ concept: c.id }).map(claimBrief),
       };
     },
   },
@@ -182,7 +187,8 @@ const TOOLS: Tool[] = [
       return {
         lesson_id: id, goal, learner: g.profile,
         on_the_map: hits.map((c) => ({ id: c.id, label: c.label.en, mastery: c.mastery, level: lvl(c), misconception: c.miscon, user_definition: c.userDef || null, summary: c.summary.en,
-          needs_first: chainBack(g.links, c.id).map((p) => ({ id: p.id, label: lab(p.id), mastery: g.concepts.find((x) => x.id === p.id)?.mastery ?? null })) })),
+          needs_first: chainBack(g.links, c.id).map((p) => ({ id: p.id, label: lab(p.id), mastery: g.concepts.find((x) => x.id === p.id)?.mastery ?? null })),
+          claims: R.listClaims({ concept: c.id }).filter((x) => x.status !== "contradicted").map(claimBrief) })),
         passages: r.passages.slice(0, 4).map((p) => ({ source: p.sourceTitle, page: p.page, text: (p.text || "").slice(0, 600) })),
         glossary: g.glossary,
         steps: TEACH_STEPS, format: FORMAT_GUIDE,
@@ -270,6 +276,95 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "neuron_study_get", description: "Get a source's passages for the Study reader: each passage's id, text, the concepts that cite it, and whether it already has a question or rewritten versions. Without source, lists sources that can be studied.",
+    inputSchema: { type: "object", properties: { source: { ...str, description: "Source id or title (part of it is fine)" }, lang: { type: "string", enum: ["en", "id"] }, from: { type: "integer", description: "First passage number (1-based), for long sources" }, count: { type: "integer", description: "How many passages (default 12)" } } }, annotations: { readOnlyHint: true },
+    run: (a) => {
+      const all = R.listSources().filter((x) => x.chunks > 0);
+      if (!a.source) return { sources: all.map((x) => ({ id: x.id, title: x.title, passages: x.chunks })) };
+      const q = String(a.source).toLowerCase(), src = all.find((x) => String(x.id) === q) || all.find((x) => x.title.toLowerCase().includes(q));
+      if (!src) throw new Error(`No source matches "${a.source}". Call neuron_study_get without source to list them.`);
+      const lang = a.lang === "id" || a.lang === "en" ? a.lang : graph().prefs.lang;
+      const st = R.getStudy(src.id, lang)!, from = Math.max(1, Number(a.from) || 1), n = Math.min(30, Number(a.count) || 12);
+      return {
+        source_id: src.id, title: src.title, language: lang, total_passages: st.passages.length, learner: graph().profile,
+        passages: st.passages.slice(from - 1, from - 1 + n).map((p, i) => ({ number: from + i, chunk_id: p.chunkId, page: p.page, text: p.text, concepts: p.concepts, has_question: p.items.length > 0, has_versions: Object.keys(p.adapted) })),
+        how: { question: "One multiple-choice question per passage that tests understanding (why, what follows, which example fits), answerable from that passage alone; 4 options of similar length with plausible wrong ones; a short why. Skip passages with nothing to test.", versions: STUDY_MODES },
+        next: from - 1 + n < st.passages.length ? `Call again with from: ${from + n} for the rest.` : "That's all the passages.",
+      };
+    },
+  },
+  {
+    name: "neuron_study_save", description: "Save questions (one per passage) and optional rewritten versions of passages for the Study reader. Questions answered in the reader update mastery and review for their concept.",
+    inputSchema: {
+      type: "object", required: ["source_id"],
+      properties: {
+        source_id: { type: "integer" }, lang: { type: "string", enum: ["en", "id"] },
+        questions: { type: "array", items: { type: "object", required: ["chunk_id", "question", "options", "answer_index"], properties: { chunk_id: { type: "integer" }, concept: { ...str, description: "Concept id from that passage's concepts, if it's about one" }, question: str, options: { type: "array", items: str, minItems: 2, maxItems: 6 }, answer_index: { type: "integer", minimum: 0 }, why: str } } },
+        versions: { type: "array", items: { type: "object", required: ["chunk_id", "mode", "text"], properties: { chunk_id: { type: "integer" }, mode: { type: "string", enum: ["simple", "interest", "deeper"] }, text: { ...str, description: "Markdown. In 'interest' mode wrap changed sentences in ==…==" } } } },
+        replace: { type: "boolean", description: "Replace existing questions on those passages" },
+      },
+    },
+    run: (a) => {
+      const sid = Number(a.source_id), lang = a.lang === "id" || a.lang === "en" ? a.lang : graph().prefs.lang;
+      const st = R.getStudy(sid, lang); if (!st) throw new Error(`No source ${a.source_id}.`);
+      const qs = Array.isArray(a.questions) ? a.questions : [];
+      if (a.replace) new Set(qs.map((q: any) => Number(q.chunk_id))).forEach((c) => R.deleteStudyItems(sid, c as number));
+      const added = R.addStudyItems(sid, lang, qs.map((q: any) => ({ chunkId: Number(q.chunk_id), conceptId: q.concept ? (() => { try { return find(graph(), q.concept).id; } catch { return null; } })() : null, question: String(q.question || ""), options: Array.isArray(q.options) ? q.options.map(String) : [], answer: Number(q.answer_index), why: q.why ? String(q.why) : null })), "claude");
+      let versions = 0;
+      for (const v of Array.isArray(a.versions) ? a.versions : []) {
+        if (!["simple", "interest", "deeper"].includes(v.mode) || !st.passages.some((p) => p.chunkId === Number(v.chunk_id)) || !v.text) continue;
+        R.saveStudyAdapt(sid, Number(v.chunk_id), v.mode, lang, String(v.text), "claude"); versions++;
+      }
+      const left = R.getStudy(sid, lang)!.passages.filter((p) => !p.items.length).length;
+      return { saved: true, questions_added: added, versions_saved: versions, passages_without_question: left, note: "Open Neuron → Study to read it." };
+    },
+  },
+  {
+    name: "neuron_claims_get", description: "Get a concept's claims (with reasons, quotes and check status) and the source passages they should be grounded in, so you can extract new claims or fact-check them. Without concept: a summary of claims by status and the concepts with unchecked or problem claims.",
+    inputSchema: { type: "object", properties: { concept: { ...str, description: "Concept id or label" } } }, annotations: { readOnlyHint: true },
+    run: (a) => {
+      if (!a.concept) {
+        const all = R.listClaims(), g = graph();
+        const by = (st: ClaimStatus[]) => [...new Set(all.filter((x) => st.includes(x.status)).map((x) => x.conceptId))].map((id) => ({ id, label: g.concepts.find((c) => c.id === id)?.label.en || id }));
+        return { counts: R.claimCounts(), with_unchecked: by(["unchecked"]), with_problems: by(["partly", "unsupported", "contradicted", "disputed"]),
+          without_claims: g.concepts.filter((c) => c.sources.length > 0 && !all.some((x) => x.conceptId === c.id)).map((c) => ({ id: c.id, label: c.label.en })) };
+      }
+      const g = graph(), c = find(g, a.concept), { passages, notes } = R.conceptPassages(c.id);
+      return {
+        concept: { id: c.id, label: c.label.en, user_definition: c.userDef || null, summary: c.summary.en },
+        claims: R.listClaims({ concept: c.id }).map((x) => ({ ...claimBrief(x), by: x.by, chunk_id: x.chunkId })),
+        passages: passages.map((p) => ({ chunk_id: p.chunkId, source: p.title, page: p.page, text: p.text })), notes,
+        glossary: g.glossary,
+        how: "Claims: 2-5 standalone sentences from the passages only, each with 1-3 'because' reasons from the passage and one verbatim quote with its chunk_id. Check: supported (passage clearly says it), partly (overstates / drops a condition / a reason isn't there), unsupported (not in the passages), contradicted (passage, user definition or glossary say otherwise), disputed (grounded but conflicts with well-established knowledge; give evidence).",
+      };
+    },
+  },
+  {
+    name: "neuron_claims_save", description: "Save claims for a concept, each with its reasons, a verbatim quote and the passage (chunk_id) it comes from. replace: true replaces earlier AI/Claude claims (the user's own are kept).",
+    inputSchema: {
+      type: "object", required: ["concept", "claims"],
+      properties: { concept: str, replace: { type: "boolean" }, lang: { type: "string", enum: ["en", "id"] },
+        claims: { type: "array", items: { type: "object", required: ["text"], properties: { text: str, because: { type: "array", items: str, maxItems: 5 }, quote: str, chunk_id: { type: "integer" } } } } },
+    },
+    run: (a) => {
+      const g = graph(), c = find(g, a.concept);
+      const ids = R.addClaims(c.id, (a.claims as any[]).map((x) => ({ text: String(x.text || ""), because: Array.isArray(x.because) ? x.because.map(String) : [], quote: x.quote ? String(x.quote) : null, chunkId: Number(x.chunk_id) || null })), "claude", a.lang || g.prefs.lang, !!a.replace);
+      return { saved: ids.length, claim_ids: ids, note: "Now check them with neuron_claims_check. They show in Neuron → Claims and in the concept's Claims tab." };
+    },
+  },
+  {
+    name: "neuron_claims_check", description: "Record fact-check results for claims: supported, partly, unsupported, contradicted or disputed, with a one-sentence note and optional evidence (a URL or a source title).",
+    inputSchema: { type: "object", required: ["results"], properties: { results: { type: "array", items: { type: "object", required: ["claim_id", "status", "note"], properties: { claim_id: { type: "integer" }, status: { type: "string", enum: ["supported", "partly", "unsupported", "contradicted", "disputed"] }, note: str, evidence: str } } } } },
+    run: (a) => {
+      let n = 0; const missing: number[] = [];
+      for (const r of a.results as any[]) {
+        if (!R.getClaim(Number(r.claim_id))) { missing.push(Number(r.claim_id)); continue; }
+        R.setClaimCheck(Number(r.claim_id), r.status, r.note ? String(r.note) : null, "claude", r.evidence ? String(r.evidence) : null); n++;
+      }
+      return { checked: n, ...(missing.length ? { not_found: missing } : {}), counts: R.claimCounts() };
+    },
+  },
+  {
     name: "neuron_research_pack", description: "Gather everything the user's Neuron has on a topic, ready to write from: matching concepts with their definitions, summaries, sources and quotes, the links between them, relevant source passages, glossary terms and saved notes. Use it first when turning research into a blog post or essay.",
     inputSchema: { type: "object", properties: { topic: { ...str, description: "The topic or question" }, max_concepts: { type: "integer", minimum: 1, maximum: 15 } }, required: ["topic"] }, annotations: { readOnlyHint: true },
     run: async (a) => {
@@ -283,7 +378,7 @@ const TOOLS: Tool[] = [
       return {
         topic, search_by_meaning: r.semantic,
         concepts: found.map((c) => ({ id: c.id, label: c.label.en, label_id: c.label.id, domains: c.domains.map((k) => dname(g, k)), user_definition: c.userDef || null, summary: c.summary.en, summary_id: c.summary.id, mastery: c.mastery,
-          sources: c.sources.map((s) => ({ title: s.title, note: s.note || null, quote: s.quote || null, page: s.page || null })), terms: c.vocab.map((v) => `${v.en} (${v.ind})`) })),
+          sources: c.sources.map((s) => ({ title: s.title, note: s.note || null, quote: s.quote || null, page: s.page || null })), terms: c.vocab.map((v) => `${v.en} (${v.ind})`), claims: R.listClaims({ concept: c.id }).map(claimBrief) })),
         links: g.links.filter((l) => l.status === "approved" && ids.has(l.from) && ids.has(l.to)).map((l) => `${lab(l.from)} ${TYPES[l.type].say.en} ${lab(l.to)}`),
         passages: r.passages.map((p) => ({ source: p.sourceTitle, page: p.page, text: (p.text || "").slice(0, 900) })),
         glossary: g.glossary.filter((x) => words.some((w) => `${x.term} ${x.definition}`.toLowerCase().includes(w))),
@@ -408,6 +503,16 @@ const PROMPTS: Prompt[] = [
     name: "continue_lesson", title: "Continue a lesson", description: "Pick up the last unfinished lesson where it stopped.",
     arguments: [{ name: "lesson_id", description: "Optional: which lesson" }],
     text: (a) => `Continue my Neuron lesson${a.lesson_id ? ` #${a.lesson_id}` : ""}: call neuron_lesson_get${a.lesson_id ? "" : " (no id, to list them) and pick the most recent unfinished one"}, briefly recap where I am, then teach the next step the same way.`,
+  },
+  {
+    name: "study_source", title: "Prepare a source for study", description: "Write a question after each passage of a source (and simpler / interest / deeper versions if you like) for Neuron's Study reader.",
+    arguments: [{ name: "source", description: "Source title or id", required: true }, { name: "versions", description: "Optional: simple, interest, deeper (comma separated)" }],
+    text: (a) => `Prepare my Neuron source "${a.source || "(ask me which)"}" for study: call neuron_study_get, write one understanding question per passage (answerable from that passage alone)${a.versions ? `, and these versions of each passage: ${a.versions}` : ""}, then save them with neuron_study_save, in batches for long sources. Tell me when it's ready in Neuron → Study.`,
+  },
+  {
+    name: "fact_check", title: "Fact-check my map", description: "Find the key claims in a concept's sources and check each one against its passage, your definitions and (if Claude can search) the wider evidence.",
+    arguments: [{ name: "concept", description: "Optional: a concept; leave empty for the unchecked ones" }],
+    text: (a) => `Fact-check ${a.concept ? `my Neuron concept "${a.concept}"` : "the unchecked claims on my Neuron map"}: call neuron_claims_get${a.concept ? "" : " (no concept) to see what needs work, then for each concept"}, add missing claims from the source passages with neuron_claims_save, and record a verdict for each with neuron_claims_check. Tell me what's contradicted, unsupported or disputed, and why.`,
   },
   {
     name: "blog_post", title: "Blog post from my research", description: "Turn what your Neuron map has on a topic into a post for your blog, with title, slug, summary, tags and sources.",

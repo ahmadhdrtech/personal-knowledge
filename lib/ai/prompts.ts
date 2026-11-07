@@ -117,3 +117,99 @@ Allowed types: open (show the concept), test (quiz on it), discuss (discuss it),
 Domain keys: ${g.domains.map((d) => `${d.key} (${d.name.en})`).join(", ")}.
 - Don’t describe the action lines in your text; the app turns them into buttons.`;
 }
+
+/* ---------- study a source ---------- */
+const studyLang = (lang: "en" | "id") => (lang === "id" ? "Write everything in Indonesian (natural, not stiff; keep common English technical terms)." : "Write everything in English.");
+
+/** One understanding question per passage, grounded only in that passage. */
+export function studyQuestionsPrompt(g: Graph, lang: "en" | "id", passages: { chunkId: number; text: string; concepts: string[] }[]) {
+  const label = (id: string) => g.concepts.find((c) => c.id === id)?.label.en || id;
+  return `${RULES}
+${learnerLine(g)}
+
+VERIFIED GLOSSARY (authoritative):
+${glossaryText(g)}
+
+You are writing the questions that appear inside a reader, right after each passage, so the learner reads actively.
+For EACH passage below write exactly one multiple-choice question that:
+- can be answered from that passage alone (never from outside knowledge);
+- tests understanding (why, what follows, which example fits, what would change), not memorised wording or trivia like numbers and names;
+- has 4 options of similar length; the wrong options are plausible misreadings of the passage, not jokes;
+- comes with a one or two sentence "why" that points back to what the passage says.
+If a passage has no idea worth testing (a heading, a reference list, a table of contents), skip it.
+${studyLang(lang)}
+
+PASSAGES:
+${passages.map((p) => `[chunk ${p.chunkId}]${p.concepts.length ? ` (concepts: ${p.concepts.map((c) => `${c} = ${label(c)}`).join(", ")})` : ""}\n"""${p.text.slice(0, 2400)}"""`).join("\n\n")}
+
+Reply with JSON only:
+{"items":[{"chunk_id":<number from the passage tag>,"concept_id":"<one of that passage's concept ids, or null>","question":"…","options":["…","…","…","…"],"answer":<0-3>,"why":"…"}]}`;
+}
+
+export const STUDY_MODES = {
+  simple: "Rewrite the passage so a curious 15-year-old understands it on first read: short sentences, everyday words, one idea per sentence. Define any technical term in plain words the first time. Keep every fact, number and claim; add nothing that isn't in the passage.",
+  interest: "Rewrite the passage around the learner's interests: replace or add the examples and analogies with ones from those interests, so the idea connects to something they already know. Keep every fact, number and claim from the passage exactly. Wrap each sentence you changed or added for the learner in ==double equals== so they can see what was personalised.",
+  deeper: "Go one level deeper than the passage: explain the mechanism behind it (why it works), one consequence or edge case, and how it connects to related concepts on the learner's map if any are listed. Use an equation in $…$ or a small ```mermaid flowchart only if it really helps. Keep what the passage says as the base; mark anything beyond the passage with 'Beyond the text:' at the start of that paragraph.",
+} as const;
+
+export function studyAdaptPrompt(g: Graph, lang: "en" | "id", mode: keyof typeof STUDY_MODES, text: string, concepts: string[]) {
+  const ctx = concepts.map((id) => g.concepts.find((c) => c.id === id)).filter(Boolean).map((c) => `- ${c!.label.en}: ${c!.userDef ? `learner's definition: ${c!.userDef}` : c!.summary.en}`).join("\n");
+  return `${RULES}
+${learnerLine(g)}
+${mode === "interest" ? `LEARNER'S INTERESTS TO DRAW EXAMPLES FROM: ${exampleSource(g)}\n` : ""}${ctx ? `CONCEPTS THIS PASSAGE IS ABOUT:\n${ctx}\n` : ""}
+TASK: ${STUDY_MODES[mode]}
+${studyLang(lang)} Use Markdown (short paragraphs, **bold** for the key idea). No headings. About the same length as the passage${mode === "deeper" ? ", up to twice as long" : ""}.
+
+PASSAGE:
+"""${text.slice(0, 3000)}"""
+
+Reply with the rewritten passage only.`;
+}
+
+/* ---------- claims and fact-checking ---------- */
+type Passage = { chunkId: number; title: string; page: number | null; text: string };
+const passageBlock = (ps: Passage[]) => ps.map((p) => `[chunk ${p.chunkId}] ${p.title}${p.page ? `, p. ${p.page}` : ""}\n"""${p.text.slice(0, 2400)}"""`).join("\n\n");
+
+/** The key claims of a concept, each with the reasons behind it, taken only from its source passages. */
+export function claimsPrompt(g: Graph, n: Concept, lang: "en" | "id", passages: Passage[], notes: string[]) {
+  return `${RULES}
+
+${conceptContext(g, n)}
+
+SOURCE PASSAGES FOR THIS CONCEPT:
+${passages.length ? passageBlock(passages) : "(none)"}
+${notes.length ? `\nSOURCE NOTES (no full passage stored):\n${notes.map((x) => `- ${x}`).join("\n")}\n` : ""}
+Write the 2 to 5 most important claims these sources make about "${n.label.en}". Each claim:
+- is one standalone sentence someone could agree or disagree with (not a topic, not a question);
+- comes only from the passages above, never from your own knowledge;
+- has "because": the 1 to 3 reasons or evidence the passage gives for it, each a short sentence (empty if the passage just asserts it);
+- has "quote": one sentence copied word for word from the passage that supports it, and the chunk number it came from.
+Prefer claims that explain how or why over plain definitions. ${lang === "id" ? "Write the claims and reasons in Indonesian; keep the quote in the passage's original language." : "Write in English; keep the quote in the passage's original language."}
+
+Reply with JSON only: {"claims":[{"text":"…","because":["…"],"quote":"…","chunk_id":<number or null>}]}`;
+}
+
+/** Check each claim against its passage, the learner's definition and the glossary. */
+export function checkClaimsPrompt(g: Graph, n: Concept, claims: { id: number; text: string; because: string[]; quote: string | null; chunkId: number | null }[], passages: Passage[], lang: "en" | "id") {
+  return `${RULES}
+
+CONCEPT: ${n.label.en}
+${n.userDef ? `LEARNER'S DEFINITION (authoritative): ${n.userDef}\n` : ""}VERIFIED GLOSSARY (authoritative):
+${glossaryText(g)}
+
+SOURCE PASSAGES:
+${passages.length ? passageBlock(passages) : "(none)"}
+
+CLAIMS TO CHECK:
+${claims.map((c) => `#${c.id}: ${c.text}${c.because.length ? `\n   because: ${c.because.join(" / ")}` : ""}${c.quote ? `\n   quoted: "${c.quote}"${c.chunkId ? ` [chunk ${c.chunkId}]` : ""}` : ""}`).join("\n")}
+
+For each claim decide, from the passages first:
+- "supported": the passage clearly says this, and the reasons match what it says;
+- "partly": part is supported, but it overstates, drops a condition, or a reason isn't in the passage;
+- "unsupported": the passages don't say this (it may still be true, but it isn't grounded);
+- "contradicted": the passages, the learner's definition or the glossary say otherwise.
+Then, separately, if a claim is grounded but conflicts with well-established knowledge, set "doubt" to one short sentence saying why (otherwise null). Don't invent sources.
+"note": one short sentence explaining the verdict (what's missing or wrong, or where it's supported). ${lang === "id" ? "Write notes in Indonesian." : "Write notes in English."}
+
+Reply with JSON only: {"results":[{"id":<claim number>,"status":"supported|partly|unsupported|contradicted","note":"…","doubt":null}]}`;
+}

@@ -252,3 +252,40 @@ table.post-fields td{vertical-align:middle;word-break:break-word}
 .result.bad{background:color-mix(in srgb,var(--danger) 10%,transparent)}
 .badge.warn{color:var(--shaky);border-color:var(--shaky)}
 .limits{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0 12px}
+.md-mark{background:color-mix(in srgb,var(--accent) 16%,transparent);color:inherit;border-radius:3px;padding:0 2px}
+.md-mark{background:color-mix(in srgb,var(--accent) 16%,transparent);color:inherit;border-radius:3px;padding:0 2px}
+/* study a source */
+.study-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;padding:10px 12px;margin:-4px 0 14px;background:var(--paper);border:1px solid var(--line);border-radius:12px}
+.study-progress{display:inline-flex;flex-direction:column;gap:2px;min-width:140px;margin-left:auto}
+.study-gen{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px;margin-bottom:14px;border:1px dashed var(--accent);border-radius:10px}
+.study-text{max-width:76ch;margin:0 auto}
+.study-passage{padding:18px 0 22px;border-bottom:1px solid var(--line);scroll-margin-top:80px}
+.passage-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px}
+.passage-orig p,.passage-adapt p{font-size:17px;line-height:1.7;margin:0 0 12px}
+.passage-adapt{padding:2px 0 2px 14px;border-left:3px solid var(--accent)}
+.passage-adapt.simple{border-left-color:var(--solid)}
+.passage-adapt.deeper{border-left-color:var(--shaky)}
+.passage-adapt .md{font-size:17px;line-height:1.7}
+.passage-missing{padding:10px 12px;border:1px dashed var(--line);border-radius:10px}
+.passage-missing p{font-size:15px}
+.study-q{margin-top:14px}
+.study-q.right{border-color:var(--solid)}
+.study-q.wrong{border-color:var(--danger)}
+.glows{max-width:76ch;margin:20px auto 0;scroll-margin-top:80px}
+.glow-h{margin:0 0 6px;color:var(--solid)}
+.grow-h{margin:0 0 6px;color:var(--accent)}
+.glows li{margin:4px 0}
+/* claims */
+.claims{margin-top:8px}
+.claim{padding:10px 12px;margin:0 0 8px;border:1px solid var(--line);border-left:3px solid var(--line);border-radius:8px;background:var(--surface)}
+.claim-supported{border-left-color:var(--solid)}
+.claim-partly,.claim-unsupported{border-left-color:var(--shaky)}
+.claim-contradicted,.claim-disputed{border-left-color:var(--danger)}
+.claim-text{margin:0;font-size:14.5px;line-height:1.5;font-weight:500}
+.because{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.5}
+.claim-quote{margin:8px 0 0;padding:4px 10px;border-left:2px solid var(--line);font-size:13px;color:var(--ink);font-style:italic}
+.claim-quote .muted{font-style:normal}
+.claim-note{margin:6px 0 0}
+.claim-actions{margin-top:6px;flex-wrap:wrap;gap:8px}
+.small-select{width:auto;padding:2px 6px;font-size:12px;height:auto}
+.claim-add{margin:8px 0;display:grid;gap:6px}

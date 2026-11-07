@@ -9,6 +9,8 @@ import type { Depth, Lang } from "@/lib/types";
 const I = {
   map: <path d="M12 12l-6-5M12 12l6-4M12 12l-1 7M12 12l7 4" />,
   dash: <><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="5" rx="1.5" /><rect x="13" y="10" width="8" height="11" rx="1.5" /><rect x="3" y="13" width="8" height="8" rx="1.5" /></>,
+  claims: <><path d="M9 12l2 2 4-4" /><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /></>,
+  study: <><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z" /><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z" /></>,
   lesson: <><path d="M3 7l9-4 9 4-9 4z" /><path d="M7 9v5c0 1.5 2.2 3 5 3s5-1.5 5-3V9" /><path d="M21 7v6" /></>,
   review: <><path d="M4 12a8 8 0 1 0 2.4-5.7" /><path d="M4 4v4h4" /><path d="M12 8v4l3 2" /></>,
   sources: <><path d="M6 3h9l4 4v14H6z" /><path d="M15 3v4h4M9 12h7M9 16h7" /></>,
@@ -36,12 +38,14 @@ export default function Sidebar() {
     { title: t("Learn", "Belajar"), items: [
       { href: "/", label: t("Map", "Peta"), icon: I.map, count: pending || undefined },
       { href: "/lessons", label: t("Lessons", "Pelajaran"), icon: I.lesson },
+      { href: "/study", label: t("Study", "Belajar"), icon: I.study },
       { href: "/views", label: t("Views", "Tampilan"), icon: I.views },
       { href: "/dashboard", label: t("Dashboard", "Dasbor"), icon: I.dash },
       { href: "/review", label: t("Review", "Review"), icon: I.review, count: dueN || undefined, hot: misN > 0 },
     ] },
     { title: t("Knowledge", "Pengetahuan"), items: [
       { href: "/sources", label: t("Sources", "Sumber"), icon: I.sources },
+      { href: "/claims", label: t("Claims", "Klaim"), icon: I.claims },
       { href: "/glossary", label: t("Glossary", "Glosarium"), icon: I.gloss, count: graph?.glossary.length || undefined },
       { href: "/writing", label: t("Writing", "Tulisan"), icon: I.write },
     ] },
